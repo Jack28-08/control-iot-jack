@@ -1,0 +1,13 @@
+# Conclusiones de avance en primera persona
+
+Para esta práctica continué el proyecto NODE/01 que ya tenía y conservé su diseño oscuro con acentos teal. Revisé la distribución en escritorio y en tamaños móviles vertical y horizontal mediante el navegador. Los controles y el pie se mantuvieron dentro de la pantalla; todavía necesito repetir esa revisión en un teléfono físico con la versión publicada.
+
+Separé el cliente REST, WebSocket, el joystick, las reglas del catálogo y la coordinación de movimientos. Corregí la búsqueda de GI para la izquierda sin deducir el identificador a partir del código. El joystick ahora ignora repeticiones de teclado, limita el gesto a un puntero y vuelve a neutral cuando se cancela o pierde el foco. Las pruebas locales también revisan que DETENER descarte acciones pendientes y que una respuesta antigua de DEMO no cambie un estado más reciente.
+
+Ejecuté 55 pruebas automáticas con respuestas y sockets ficticios. Ese resultado me permite revisar regresiones del frontend sin enviar movimientos a AWS. No lo considero una prueba de operación del servidor. Durante el diagnóstico real, el dominio resolvió, pero la conexión al puerto 443 agotó el tiempo. Por eso mantuve sin verificar la API, RDS, el certificado y CORS del despliegue, sin atribuir la falla a una causa que no pude comprobar.
+
+Entendí la diferencia entre solicitar un comando, recibir una aceptación HTTP y observar un evento WebSocket. Ninguna de esas evidencias demuestra movimiento físico. También reconocí el límite de DETENER: abortar una petición en el navegador no deshace una orden que el servidor ya estaba procesando. La aplicación mantiene separados el WSS del navegador, la salud de AWS y el diagnóstico seguro de RDS.
+
+Las DEMO se consultan por GET y su ejecución pertenece al backend; no agregué secuencias fijas al JavaScript. La revisión del código muestra que los pasos se obtienen de RDS y no generan historial individual, pero todavía debo comprobar el inicio 202, los N eventos ordenados, la finalización y la cancelación con un cliente WSS independiente y permiso para realizar los POST.
+
+La clave del operador se solicita de forma temporal y permanece sólo en memoria. Preparé el repositorio local del frontend y la guía de GitHub Pages sin cambiar el backend. Para cerrar la entrega faltan la publicación autorizada, la conectividad real, las evidencias de operación y teléfono, y la exportación final del documento editable a PDF. Prefiero dejar esos límites claros antes que presentar como realizada una prueba pendiente.

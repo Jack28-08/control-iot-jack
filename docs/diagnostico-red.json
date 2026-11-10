@@ -1,0 +1,152 @@
+{
+  "fecha_local": "2026-11-09T22:30:04-06:00",
+  "zona_horaria": "America/Mexico_City",
+  "origen_prueba": "Computadora del usuario, comandos Python y curl.exe",
+  "base_api": "https://184-72-72-255.sslip.io",
+  "secreto_utilizado": false,
+  "post_ejecutados": 0,
+  "backend_modificado": false,
+  "salud_inicial": {
+    "metodo": "GET",
+    "ruta": "/health",
+    "tls_verificado_si_se_establece": true,
+    "timeout_s": 12,
+    "resultado": "URLError timed out",
+    "http_status": null
+  },
+  "dns": {
+    "hostname": "184-72-72-255.sslip.io",
+    "ip": [
+      "184.72.72.255"
+    ],
+    "segundos": 0.014,
+    "resultado": "resuelto"
+  },
+  "tcp": {
+    "host": "184.72.72.255",
+    "puerto": 443,
+    "timeout_s": 6,
+    "segundos": 6.013,
+    "resultado": "timed out"
+  },
+  "tls": {
+    "estado": "Sin verificar",
+    "razon": "No se establecio TCP; no se obtuvo certificado. SSL_VERIFY=0 en curl sin conexion no acredita certificado valido."
+  },
+  "api": {
+    "estado": "No accesible desde esta PC durante la prueba",
+    "http_status": null,
+    "no_inferir": "No demuestra EC2 apagado; puede existir bloqueo de red, firewall o servicio."
+  },
+  "rds": {
+    "estado": "Sin verificar",
+    "razon": "API no accesible; no se recibio 200 ni 503 de /health/db"
+  },
+  "cors": [
+    {
+      "origin": "http://localhost:5500",
+      "metodo": "GET",
+      "ruta": "/health",
+      "preflight_metodo": null,
+      "preflight_headers": null,
+      "exit_code_curl": 28,
+      "http_status": null,
+      "segundos": 6.010438,
+      "resultado": "Sin verificar, timeout de conexion TCP"
+    },
+    {
+      "origin": "http://localhost:5500",
+      "metodo": "OPTIONS",
+      "ruta": "/vehiculos/1/movimientos",
+      "preflight_metodo": "POST",
+      "preflight_headers": "content-type,x-api-key",
+      "exit_code_curl": 28,
+      "http_status": null,
+      "segundos": 6.008719,
+      "resultado": "Sin verificar, timeout de conexion TCP"
+    },
+    {
+      "origin": "https://jack28-08.github.io",
+      "metodo": "GET",
+      "ruta": "/health",
+      "preflight_metodo": null,
+      "preflight_headers": null,
+      "exit_code_curl": 28,
+      "http_status": null,
+      "segundos": 6.006993,
+      "resultado": "Sin verificar, timeout de conexion TCP"
+    },
+    {
+      "origin": "https://jack28-08.github.io",
+      "metodo": "OPTIONS",
+      "ruta": "/vehiculos/1/movimientos",
+      "preflight_metodo": "POST",
+      "preflight_headers": "content-type,x-api-key",
+      "exit_code_curl": 28,
+      "http_status": null,
+      "segundos": 6.011775,
+      "resultado": "Sin verificar, timeout de conexion TCP"
+    }
+  ],
+  "catalogos_y_swagger": {
+    "estado": "Pendientes",
+    "rutas": [
+      "/health/db",
+      "/vehiculos/1",
+      "/vehiculos/1/comandos",
+      "/vehiculos/1/demos",
+      "/vehiculos/1/demos/{id_demo}/movimientos",
+      "/docs",
+      "/openapi.json"
+    ],
+    "razon": "No se consultaron tras fallar salud y TCP; no hay datos RDS reales que reportar."
+  },
+  "wss": {
+    "url": "wss://184-72-72-255.sslip.io/ws/vehiculos/1",
+    "estado": "Sin verificar",
+    "razon": "TCP 443 inaccesible; sin handshake ni eventos capturados"
+  },
+  "demo_runtime": {
+    "inicio_202": "Pendiente, no autorizado POST",
+    "eventos_ordenados": "Pendiente",
+    "final_cancelacion": "Pendiente",
+    "sin_historial_individual": "Verificado en codigo; pendiente prueba real"
+  },
+  "codigo_github": [
+    {
+      "archivo": "app/main.py",
+      "sha": "74f54b21e67947547a9ae1410f8293a7074524fc",
+      "hallazgo": "No contiene CORSMiddleware; no demuestra por si solo configuracion del reverse proxy desplegado"
+    },
+    {
+      "archivo": "app/routes/demos.py",
+      "sha": "b9ce151d7091d6a7e43c36f6f00bcb2565ea5eba",
+      "hallazgo": "POST iniciar status_code=202; cancelacion cooperativa y STOP logico"
+    },
+    {
+      "archivo": "app/services/demo_data.py",
+      "sha": "e2c28b9230a809c1ec8d383b2de9450025b53e94",
+      "hallazgo": "prepare consulta movimientos y comandos en transaccion readonly; N pasos desde repositorio RDS"
+    },
+    {
+      "archivo": "app/services/movimientos.py",
+      "sha": "566eef9684e40d320f7fb67a9b5b6602adb36c4a",
+      "hallazgo": "MovimientoDeDemo._registrar_historial retorna None"
+    },
+    {
+      "archivo": "app/services/demos.py",
+      "sha": "74c7529b90c197e0373b3629e1676e9f66c7788c",
+      "hallazgo": "Publica inicio, pasos tras commit y terminal con locks; espera duracion_ms y pausa_ms desde plan"
+    },
+    {
+      "archivo": "app/repositories/vehiculos.py",
+      "sha": "585c31ccfadb2706b9d56cd4d5155ef3a8974ac0",
+      "hallazgo": "SP sp_obtener_demos y sp_obtener_movimientos_demo"
+    },
+    {
+      "archivo": "app/models/events.py",
+      "sha": "9f77f16c591cf6c3f73cfaeed6d20f650f8802fc",
+      "hallazgo": "Campos reales: tipo,id_vehiculo,id_comando,comando,codigo,fecha_hora,conectado,id_ejecucion,id_demo,total_movimientos,orden,duracion_ms,pausa_ms,mensaje"
+    }
+  ]
+}

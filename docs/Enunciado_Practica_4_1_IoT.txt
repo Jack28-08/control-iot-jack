@@ -1,0 +1,325 @@
+
+	
+Tecnológico Nacional de México campus Pachuca
+
+Ingeniería en Sistemas Computacionales
+
+Implementación de soluciones IoT
+
+M.C. Víctor Manuel Pinedo Fernández
+
+
+
+
+ACTIVIDAD PRÁCTICA
+
+4.1 Aplicación de control para IoT
+
+Desarrollo frontend responsivo con joystick virtual, controles táctiles, integración REST/WebSocket con AWS y despliegue en GitHub Pages
+
+
+Objetivo
+Diseñar, desarrollar, integrar y publicar de manera individual una aplicación web de control para un vehículo IoT, con una interfaz moderna, intuitiva y completamente responsiva, priorizando el uso desde teléfonos inteligentes. Implementar joystick virtual, controles táctiles para todos los comandos admitidos por el vehículo, detención prioritaria y selección y ejecución de DEMO existentes. Consumir las APIs REST ya desarrolladas y desplegadas en AWS mediante Fetch y async/await; comprobar, con Postman, Thunder Client o una extensión WebSocket para Chrome, que las acciones efectuadas en la interfaz producen los eventos correspondientes en el canal WebSocket. Mostrar indicadores independientes del WebSocket de la aplicación, del servidor de AWS que aloja las 21 APIs y de la disponibilidad de Amazon RDS cuando esta pueda comprobarse por el backend. Aplicar modularidad, accesibilidad, seguridad, manejo de errores, pruebas funcionales, Git y publicación en GitHub Pages. Utilizar inteligencia artificial como apoyo al desarrollo sin recibir código fuente resuelto.
+
+
+Contexto de la solución
+
+
+
+El proyecto integral de la asignatura Implementación de soluciones IoT comprende tres aplicaciones complementarias:
+
+CONTROL: operar el vehículo mediante joystick, botones y DEMO;
+MONITOREO: consultar estados, eventos e historial de operación; y
+ADMINISTRACIÓN/CONFIGURACIÓN: gestionar vehículos, comandos, DEMO, usuarios y permisos.
+
+El control y el monitoreo se desarrollarán individualmente en etapas separadas; la administración se integrará posteriormente en equipos de tres a cuatro estudiantes para coordinar varios vehículos.
+
+
+En prácticas previas, cada alumno construyó una API con Python/FastAPI y programación orientada a objetos, basada en las operaciones y procedimientos almacenados del esquema vehiculo_iot en Amazon RDS; posteriormente se planteó su publicación en AWS mediante HTTPS y WSS. La presente práctica reutiliza los servicios ya disponibles. No debe duplicar el backend, crear nuevos procedimientos almacenados ni modificar el diseño de la base de datos sin indicación docente.
+
+
+Resumen de práctica: GitHub Pages (HTML5 + CSS3 + Bootstrap 5 + JavaScript modular) → Fetch/async-await → API REST en AWS (FastAPI) → lógica de negocio y Amazon RDS → evento WebSocket (WSS) → cliente de prueba en Postman/Thunder Client/extensión Chrome. No se conecta todavía el ESP8266/ESP32.
+
+Delimitación y reglas de negocio
+
+
+
+Trabajo individual: cada estudiante produce su propia interfaz y la integra con la API que ya tiene en AWS.
+Se desarrollará solamente la aplicación de CONTROL. No crear pantallas de monitoreo histórico, gráficas, CRUD administrativo, usuarios, permisos ni edición de comandos/DEMO.
+La interfaz admitirá los comandos reales del catálogo del vehículo; no deberá inventar nombres o códigos incompatibles con la API.
+El joystick controlará AVANZAR, RETROCEDER, IZQUIERDA, DERECHA y DETENER según el catálogo; los demás movimientos disponibles se presentarán mediante botones claros y accesibles.
+Las DEMO se consultarán y ejecutarán desde la interfaz, con posibilidad de cancelación. Su creación, modificación y eliminación pertenecen a la futura aplicación de administración.
+Un movimiento individual válido actualizará estado e historial conforme a la API existente; los movimientos internos de una DEMO no deben agregarse al historial individual, según las reglas ya implementadas en el backend.
+Una DEMO ejecutará sus N movimientos en el orden establecido y respetará duración y pausa; no se codificará una secuencia fija en el frontend.
+No permitir dos DEMO simultáneas ni comandos incompatibles concurrentes para el mismo vehículo. DETENER y cancelar tendrán prioridad operativa.
+La aplicación mostrará TRES indicadores independientes, actualizados con verificaciones reales: (1) «WebSocket»: En línea, Conectando/Reconectando o Desconectado; (2) «API AWS · 21 servicios»: Disponible, Comprobando o No disponible; (3) «Base de datos · Amazon RDS»: Disponible, No disponible o Sin verificar. «WebSocket en línea» representa en esta práctica la conexión del navegador con el servidor WSS y NO demuestra que el vehículo físico esté conectado. Una API accesible tampoco confirma que las 21 operaciones funcionen ni que el motor se haya movido.
+Publicar solamente el frontend en GitHub Pages. No migrar aún a Vercel ni implementar control físico del microcontrolador.
+Herramientas obligatorias
+Visual Studio Code; HTML5 semántico; CSS3; Bootstrap 5; JavaScript ES6+ con módulos nativos; Fetch API y async/await; WebSocket nativo en la aplicación para reflejar el estado WSS y recibir eventos, más un cliente externo para verificar independientemente los mensajes; Git; GitHub; GitHub Pages; DevTools del navegador; Postman o Thunder Client o una extensión WebSocket de Chrome; inteligencia artificial generativa para producir y revisar el código. El backend existente usa Python/FastAPI y AWS con HTTPS/WSS; no se desarrollará nuevamente en esta práctica.
+
+1. Preparar el entorno y comprender la API existente
+1
+
+Reconocer los recursos de AWS y las reglas existentes
+
+• 1.1 Identifica la URL base HTTPS de tu API, la URL WSS por vehículo y el identificador de tu vehículo de prueba. Identifica además las rutas documentadas para comprobar la disponibilidad de la API y de sus dependencias/RDS, si existen; no inventes sus nombres.
+
+• 1.2 Revisa la documentación Swagger y registra los métodos, rutas, parámetros, encabezados, modelos JSON y códigos de respuesta reales para consultar comandos, consultar DEMO, ejecutar movimiento, iniciar DEMO y cancelar DEMO si el backend ya contempla esta acción.
+
+• 1.3 Confirma la respuesta que publica WebSocket al conectarse, la emisión de eventos para movimientos individuales y las etapas de ejecución de DEMO.
+
+• 1.4 No supongas que GET/POST están en una ruta determinada: usa exclusivamente los contratos implementados en tus 21 servicios previos. Registra cualquier requisito de autenticación, CORS, HTTPS o WSS.
+
+• 1.5 Si falta un endpoint necesario en tu API, documenta el impedimento y consúltalo con el docente; no inventes uno incompatible ni expongas la base de datos al navegador.
+
+2
+
+Crear el proyecto frontend y el repositorio
+
+• 2.1 Crea el proyecto en Visual Studio Code y un repositorio Git desde el inicio; usa nombres consistentes y commits verificables.
+
+• 2.2 Organiza el proyecto con archivos separados para HTML, estilos, componentes, configuración, control de movimientos, manejo de DEMO, cliente REST, estado de interfaz, errores e imágenes.
+
+• 2.3 Prepara rutas de recursos compatibles con publicación en subruta de GitHub Pages. No dependas de rutas absolutas que funcionen solo en localhost.
+
+• 2.4 Documenta en README la estructura, requisitos, ejecución local y puntos de integración con la API.
+
+2. Diseñar la interfaz de control responsiva
+3
+
+Diseñar la experiencia visual Mobile First
+
+• 3.1 Diseña primero para pantalla de celular; adapta progresivamente a tableta y escritorio mediante Bootstrap 5 y CSS personalizado.
+
+• 3.2 Presenta nombre del vehículo, joystick principal, controles complementarios, DETENER, selector de DEMO y mensajes de acción, sin saturar la pantalla. Agrega al pie de la interfaz un apartado de créditos visible, discreto y responsivo con el texto «Desarrollado por [nombre completo del alumno] · [año]». Debe quedar al final del contenido y nunca cubrir el joystick ni los botones.
+
+• 3.3 Utiliza una identidad visual profesional: tipografía legible, iconos consistentes, contraste suficiente, espaciado adecuado y jerarquía clara. Diseña un favicon original, relacionado con el proyecto IoT, y configúralo en el HTML para que se muestre en la pestaña del navegador. Comprueba sus rutas y formatos compatibles con GitHub Pages.
+
+• 3.4 Permite orientación vertical y horizontal. Evita desbordamiento, superposición, zoom involuntario, botones demasiado próximos y desplazamientos innecesarios.
+
+• 3.5 Mantén accesibles las acciones esenciales al operar con una sola mano. Diseña tamaños táctiles adecuados (objetivo aproximado de 44 × 44 CSS px o superior cuando sea posible).
+
+4
+
+Implementar joystick táctil y con mouse
+
+• 4.1 Implementa un joystick circular intuitivo con punto neutral visible y respuesta al gesto de arrastrar/presionar.
+
+• 4.2 Mapea sus direcciones a los comandos reales del vehículo; al cambiar de dirección, actualiza la indicación visual y envía el comando correspondiente conforme a las reglas de control.
+
+• 4.3 Al soltar el joystick, perder el puntero o cancelar el gesto, restablece el centro y solicita DETENER. Debe ser posible operar con mouse y pantalla táctil.
+
+• 4.4 Evita enviar solicitudes continuamente por cada movimiento de píxel; emite una acción al cambiar el comando efectivo y controla repeticiones, ráfagas y duplicaciones.
+
+• 4.5 No declares una ejecución física confirmada por mover el joystick: muestra «solicitado», «aceptado por API» y «evento recibido» solo cuando haya evidencia correspondiente.
+
+5
+
+Implementar botones de movimiento y DETENER
+
+• 5.1 Presenta los movimientos adicionales disponibles en el catálogo (por ejemplo giros de 90°/360°, si existen en el vehículo), con texto o iconos comprensibles.
+
+• 5.2 Todos los botones deberán invocar la misma lógica de comandos que utiliza el joystick, sin duplicar las reglas de negocio.
+
+• 5.3 Marca los estados presionado, deshabilitado, enviando, recibido y error de forma visible y accesible.
+
+• 5.4 Establece DETENER como acción prioritaria, disponible aun cuando exista una DEMO o una solicitud pendiente; evita que respuestas tardías de comandos anteriores vuelvan a activar visualmente el movimiento.
+
+6
+
+Implementar indicadores de estado: WebSocket, API AWS y RDS
+
+• 6.1 Integra en la interfaz responsiva tres indicadores separados: «WebSocket WSS» (En línea / Conectando o Reconectando / Desconectado), «Servidor AWS · API de 21 servicios» (Disponible / Comprobando / No disponible) y «Amazon RDS» (Disponible / No disponible / Sin verificar). Usa texto más iconografía y colores accesibles, nunca solo color. El estado de AWS debe indicar disponibilidad del servicio de salud comprobado, no que se hayan ejecutado exitosamente las 21 APIs.
+
+• 6.2 Desde la propia aplicación abre una conexión WSS REAL al servicio existente de AWS y actualiza el indicador WebSocket conforme a los eventos de apertura, error, cierre y reconexión de esa sesión. Si la conexión se pierde, abandona inmediatamente «En línea» y muestra el estado correspondiente. Cuando el ESP8266/ESP32 se conecte en una etapa posterior, la presencia real del vehículo requerirá una señal/latido propio y NO se deducirá de este WebSocket del navegador. El control podrá mostrar la última acción enviada, su aceptación HTTP y su evento recibido, sin transformarse en el módulo de monitoreo.
+
+• 6.3 Comprueba la API de AWS mediante una solicitud HTTPS periódica y controlada a una operación de salud/estado documentada; evita consultas excesivas y maneja timeouts. Para Amazon RDS utiliza solo un diagnóstico seguro de dependencias EXPUESTO por el backend, que efectivamente compruebe la base de datos; no abras conexiones MySQL desde el navegador ni muestres «Disponible» cuando no existe verificación: usa «Sin verificar». Si API o WSS se interrumpen, muestra el fallo, intenta recuperarte de manera controlada y no congeles la interfaz ni atribuyas la caída a RDS sin evidencia.
+
+3. Integrar Fetch, REST y WebSocket con AWS
+7
+
+Implementar cliente REST modular
+
+• 7.1 Construye un módulo de servicio que centralice URL base, operaciones HTTP, encabezados y tratamiento de respuestas JSON; usa Fetch API con async/await.
+
+• 7.2 Consume GET para cargar exclusivamente los datos necesarios: identificación del vehículo, comandos disponibles y listado/definición de DEMO, de acuerdo con las rutas existentes.
+
+• 7.3 Ejecuta movimientos individuales mediante el método de escritura documentado por tu API (POST según la práctica anterior) y usa los modelos de solicitud reales.
+
+• 7.4 Implementa gestión de tiempos de espera, abortos cuando sean apropiados, códigos HTTP, errores de red y respuestas no válidas. No uses GET para generar movimientos.
+
+• 7.5 No envíes nuevas solicitudes por cada fotograma del joystick. Evita ráfagas y condiciones de carrera; preserva la prioridad de DETENER.
+
+8
+
+Comprobar el canal WebSocket de forma independiente
+
+• 8.1 Abre y mantén desde el frontend su propia conexión WSS para actualizar el indicador de WebSocket en tiempo real. Además, conecta un cliente WebSocket INDEPENDIENTE mediante Postman, Thunder Client o extensión confiable de Chrome al mismo vehículo para comprobar los eventos producidos por el backend; distingue claramente ambas conexiones.
+
+• 8.2 Comprueba que el servidor entregue el estado inicial cuando esté implementado y que transmita los eventos relacionados con las acciones solicitadas mediante REST.
+
+• 8.3 Presiona AVANZAR, cambia a otra dirección y utiliza DETENER desde tu interfaz web; observa los mensajes recibidos por el cliente independiente.
+
+• 8.4 Relaciona cada evento con el vehículo, comando y código recibidos, así como con la marca temporal o identificador disponible. No inventes atributos que no existan en la respuesta.
+
+• 8.5 Aclara en las evidencias que observar un evento WebSocket confirma la publicación del evento por el backend, no la ejecución física en motores.
+
+9
+
+Conectar selección y ejecución de DEMO
+
+• 9.1 Consulta desde la API las DEMO ya almacenadas para el vehículo; el usuario debe elegir una del catálogo y no crearla ni editarla desde CONTROL.
+
+• 9.2 Inicia la DEMO mediante la operación documentada en AWS, con Fetch y async/await, y recibe sus eventos ordenados en el cliente WebSocket externo.
+
+• 9.3 Comprueba inicio, secuencia de N movimientos con orden/duración/pausa y finalización. Si la API ofrece cancelación, impleméntala y comprueba su evento.
+
+• 9.4 Impide que una DEMO se inicie dos veces; bloquea o coordina comandos conflictivos mientras se ejecuta.
+
+• 9.5 Respeta la regla: los movimientos de DEMO actualizan estado y se publican por WebSocket, pero no generan registros individuales en historial.
+
+10
+
+Configurar comunicación segura desde GitHub Pages
+
+• 10.1 Verifica que la API pueda consumirse mediante HTTPS y que el cliente WebSocket utilice WSS. Evita contenido mixto desde la URL HTTPS de GitHub Pages.
+
+• 10.2 Configura CORS en el backend únicamente para los orígenes autorizados de la aplicación, métodos y encabezados necesarios. Recuerda que CORS no equivale a autenticación.
+
+• 10.3 Nunca coloques claves de AWS, credenciales RDS, tokens permanentes ni secretos dentro de JavaScript, archivos JSON públicos o GitHub Pages.
+
+• 10.4 Si la API requiere autorización, aplica el mecanismo previsto por el backend para un cliente público, evitando incluir credenciales privilegiadas en el repositorio.
+
+• 10.5 Trata los datos recibidos de la API como no confiables y controla su representación en el DOM. No implementes acceso directo desde el navegador a MySQL/RDS.
+
+4. Aplicar calidad de software y probar
+11
+
+Revisar arquitectura, accesibilidad y errores
+
+• 11.1 Separa componentes de interfaz, servicios HTTP, datos del vehículo, estado operacional y coordinación de comandos/DEMO. Utiliza JavaScript Modules y código reutilizable.
+
+• 11.2 Incluye estados de carga, mensajes de error y retroalimentación visual, sin exponer trazas internas, secretos ni información sensible.
+
+• 11.3 Implementa etiquetas semánticas, nombres accesibles, navegación por teclado cuando corresponda, contraste suficiente y foco visible.
+
+• 11.4 Comprueba que el diseño no dependa de un único dispositivo ni de un único navegador.
+
+12
+
+Ejecutar pruebas funcionales obligatorias
+
+• 12.1 Prueba A, movimiento individual: desde el móvil presiona AVANZAR; verifica la solicitud POST exitosa, el evento en WebSocket y la correspondencia de vehículo/comando.
+
+• 12.2 Prueba B, cambio y detención: cambia de dirección y suelta el joystick; confirma el envío del nuevo movimiento y después DETENER, así como sus eventos, sin comandos duplicados por arrastre.
+
+• 12.3 Prueba C, DEMO: selecciona una DEMO existente, iníciala y verifica por WebSocket el inicio, N movimientos ordenados y el evento final. Si la API admite cancelación, muestra también su comprobación.
+
+• 12.4 Prueba D, indicadores de conexión y recuperación: demuestra el cambio del indicador WebSocket al abrirse WSS, perderse la sesión y reconectarse; comprueba de forma separada el estado del servidor AWS al perderse o recuperarse su API HTTPS. Para Amazon RDS, presenta la respuesta de diagnóstico seguro del backend o el estado «Sin verificar» si ese diagnóstico no existe. Verifica que la interfaz nunca confunda estas tres condiciones ni suponga conectividad física del vehículo.
+
+• 12.5 Prueba E, responsividad: comprueba la interfaz publicada en móvil vertical/horizontal y en escritorio, incluyendo área táctil, visibilidad y funcionamiento de botones.
+
+• 12.6 Registra únicamente las evidencias solicitadas, con capturas legibles de la URL, el control accionado y el mensaje WebSocket correspondiente.
+
+5. Publicar exclusivamente en GitHub Pages
+13
+
+Publicar el repositorio y activar Pages
+
+• 13.1 Sube el proyecto completo a GitHub con commits descriptivos y README, excluyendo recursos temporales o secretos.
+
+• 13.2 Activa GitHub Pages desde la rama y la carpeta elegidas; verifica el archivo de entrada y las rutas relativas de todos los recursos.
+
+• 13.3 Abre la URL HTTPS publicada en una computadora y en un dispositivo móvil real.
+
+• 13.4 Comprueba desde la versión publicada —no solo desde localhost— los movimientos mediante REST y la recepción de eventos WebSocket. Confirma también que el favicon se muestre en la pestaña del navegador y que los créditos del desarrollador aparezcan al final de la interfaz en escritorio y móvil.
+
+• 13.5 No publiques otro backend, no migres a Vercel ni modifiques la API salvo correcciones indispensables de despliegue seguro o CORS y previamente autorizadas.
+
+6. Evidencias mínimas
+14
+
+Reunir las evidencias
+
+• 14.1 Evidencia 1. Estructura modular del proyecto en Visual Studio Code y repositorio GitHub.
+
+• 14.2 Evidencia 2. Interfaz moderna y responsiva en escritorio y móvil, mostrando joystick, botones y DEMO. Presenta también el apartado de créditos del desarrollador en el pie de página.
+
+• 14.3 Evidencia 3. Prueba de movimiento individual: control accionado en la página y evento equivalente visible en Postman/Thunder Client/extensión Chrome.
+
+• 14.4 Evidencia 4. Prueba de cambio de dirección y DETENER con eventos WebSocket correspondientes.
+
+• 14.5 Evidencia 5. Prueba de DEMO, con inicio y movimientos secuenciados; cancelación o finalización según el escenario demostrado.
+
+• 14.6 Evidencia 6. Panel de estado con WebSocket, servidor AWS (API con 21 servicios) y Amazon RDS; evidencia cambios por apertura, caída y recuperación de WebSocket y API, y disponibilidad o «Sin verificar» de RDS según comprobación real.
+
+• 14.7 Evidencia 7. URL pública de GitHub Pages funcionando en el teléfono y URL del repositorio. Incluye una captura en la que se aprecie el favicon de la aplicación en la pestaña del navegador.
+
+7. Entrega
+15
+
+Preparar PDF institucional
+
+• 15.1 Elabora en Microsoft Word un documento con portada institucional: logotipo, institución, carrera, asignatura, número y título de práctica, nombre del docente, nombre del alumno y fecha.
+
+• 15.2 Incluye objetivo, descripción breve de arquitectura frontend/API, evidencias en el orden establecido, descripción bajo cada captura y conclusiones técnicas.
+
+• 15.3 Exporta el documento de Word a PDF y conserva su fuente editable.
+
+• 15.4 Entrega tres elementos: (1) URL de GitHub Pages; (2) URL del repositorio GitHub; (3) archivo PDF de evidencias. Ambos enlaces deben estar también dentro del PDF, completos y clicables.
+
+16
+
+Redactar conclusiones técnicas
+
+• 16.1 Explica cómo se diseñó la experiencia Mobile First y se implementaron joystick, controles, DETENER y DEMO.
+
+• 16.2 Justifica la separación entre UI, cliente REST, reglas de operación y visualización de respuesta.
+
+• 16.3 Describe cómo comprobaste la comunicación HTTP y la publicación de eventos WebSocket desde la página publicada. Explica por separado cómo validaste el estado del WebSocket del navegador, la disponibilidad de la API AWS y, cuando hubo diagnóstico autorizado, la conectividad con Amazon RDS.
+
+• 16.4 Distingue solicitud, aceptación HTTP, evento WebSocket y ejecución física, y explica las limitaciones de esta etapa.
+
+• 16.5 Resume las medidas de seguridad, control de errores, accesibilidad y aspectos que se reutilizarán en etapas de monitoreo y administración.
+
+8. Prompt maestro obligatorio para desarrollar con inteligencia artificial
+Instrucción para el alumno: copia el siguiente prompt en la inteligencia artificial de tu elección. Antes de ejecutarlo, sustituye los campos entre corchetes con la información real de tu API obtenida de Swagger, los eventos WebSocket y tu vehículo. Aporta la documentación de tus endpoints cuando la IA la solicite. No compartas contraseñas, secretos ni credenciales.
+
+PROMPT MAESTRO — APLICACIÓN WEB DE CONTROL IoT
+Actúa como arquitecto de software frontend, desarrollador senior de JavaScript, especialista UX/UI Mobile First e ingeniero de integración IoT con FastAPI, REST, WebSocket, AWS y GitHub Pages. Necesito generar una aplicación web real, completa, modular, segura y lista para publicarse, destinada ÚNICAMENTE al CONTROL de mi vehículo IoT. No desarrolles un backend nuevo, no generes tablas, no alteres los 21 procedimientos almacenados existentes y no implementes todavía el módulo de monitoreo ni el de administración.
+
+CONTEXTO GENERAL: Este proyecto tendrá tres aplicaciones en etapas independientes: Control (esta práctica, individual), Monitoreo (próxima etapa, individual) y Administración/Configuración (etapa posterior en equipo). El backend ya existe en AWS, construido en Python/FastAPI con POO, APIs REST documentadas y WebSocket para eventos en tiempo real; la persistencia está en Amazon RDS MySQL. El frontend se publicará por ahora SOLO en GitHub Pages. La conexión física del ESP8266/ESP32 se realizará posteriormente.
+
+DATOS REALES QUE TE DARÉ: URL base HTTPS [API_BASE_URL]; URL WSS [WS_URL]; identificador del vehículo [VEHICLE_ID]; documento Swagger/OpenAPI [SWAGGER_URL O ESPECIFICACIÓN]; endpoints y contratos reales para consultar comandos [GET_COMANDOS], consultar DEMO [GET_DEMOS], activar un movimiento [POST_MOVIMIENTO], iniciar DEMO [POST_INICIAR_DEMO], cancelar DEMO [ENDPOINT_CANCELAR_SI_EXISTE]; ejemplos reales de solicitudes y respuestas JSON [JSON_REALES]; catálogo de comandos/códigos [CATALOGO]; tipos de mensajes del WebSocket [EVENTOS_WSS]; servicio de salud de API [API_HEALTH_URL, SI EXISTE] y comprobación segura de RDS [DB_READY_URL, SI EXISTE], con sus respuestas reales. No inventes /health, /ready, endpoints ni propiedades JSON. No inventes nombres de endpoints, métodos, campos JSON, códigos ni respuestas; si falta información, señálala específicamente y pregunta solo por los datos indispensables antes de codificar esa integración.
+
+REQUISITOS VISUALES: Diseña una interfaz contemporánea, profesional, atractiva, con gran claridad visual y experiencia cercana a una aplicación móvil nativa. Trabaja Mobile First con HTML5 semántico, CSS3, Bootstrap 5, componentes responsivos, tipografía e iconografía consistentes, estados visibles y accesibilidad. Debe funcionar en celular vertical y horizontal, tableta y escritorio sin desbordamientos. Incluye nombre del vehículo, joystick circular táctil, botones secundarios para el catálogo de movimientos, DETENER muy visible, selector/ejecución de DEMO, panel de conectividad con TRES estados visibles y diferenciados: WebSocket WSS (En línea/Conectando-Reconectando/Desconectado), servidor AWS de 21 APIs (Disponible/Comprobando/No disponible), y Amazon RDS (Disponible/No disponible/Sin verificar), más mensajes de acción. Utiliza texto, iconos y colores accesibles. Exige un favicon propio del proyecto y correctamente vinculado para GitHub Pages. Agrega en el pie de la aplicación, no en el encabezado ni en un modal, los créditos visibles y adaptables «Desarrollado por [nombre completo del alumno] · [año]»; no deberán superponerse con los controles.
+
+JOYSTICK: Implementa interacciones reales con Pointer Events o un mecanismo equivalente que funcione con mouse y pantallas táctiles. Mapea direcciones únicamente a los comandos válidos, con zona neutral y retorno al centro. En cada transición de dirección envía el comando apropiado y evita POST repetitivos por cada píxel o fotograma. Al soltar, cancelar el gesto o perder el puntero, muestra neutral y solicita DETENER. Gestiona cambios rápidos, eventos perdidos, solicitudes pendientes, duplicaciones y prioridad absoluta de detener.
+
+BOTONES: Los controles adicionales deben representar únicamente operaciones disponibles para el vehículo, por ejemplo giros de 90° o 360° cuando estén en su catálogo. Todos los botones y el joystick deben reutilizar un único servicio de envío de comandos y una lógica común de validación. Evita comandos incompatibles simultáneos y define estados normal, presionado, enviando, aceptado, error y deshabilitado.
+
+DEMO: Carga DEMO existentes desde la API. Permite seleccionar, iniciar y cancelar una DEMO cuando el backend disponga de la operación. NO agregues CRUD de DEMO. Respeta el orden y la temporización ejecutados por el backend; no fabriques una lista fija de pasos ni reproduzcas la secuencia en el navegador cuando corresponde al servidor. Evita dos DEMO simultáneas y prioriza cancelar/DETENER. Los movimientos internos de DEMO se reportan por WebSocket y actualizan el estado según el backend, pero NO se almacenan como movimientos individuales en el historial.
+
+INTEGRACIÓN REST: Crea un cliente HTTP modular con Fetch y async/await. Usa GET solo para consulta y el método de escritura real (POST conforme al backend previo) para movimientos y acciones de DEMO. Centraliza URL base, métodos, headers, parseo JSON, errores, códigos HTTP, timeout/AbortController cuando proceda, validación de respuestas y mensajes amigables. Separa estrictamente vista, control de eventos, dominio de comandos, cliente REST y utilidades. No uses lógica monolítica, duplicada, credenciales incrustadas, ni acceso directo desde el frontend a RDS.
+
+WEBSOCKET Y VALIDACIÓN: En esta práctica no necesito construir una nueva aplicación de monitoreo. Debe ser posible abrir en Postman, Thunder Client o una extensión de Chrome una sesión WSS independiente hacia la API, presionar desde el frontend un comando y observar el evento asociado (mismo vehículo, comando, código y marca temporal si están disponibles). Documenta cómo hacer esta prueba y cómo verificar inicio, N movimientos, finalización o cancelación de una DEMO. No confundas HTTP exitoso ni mensaje WebSocket con ejecución física confirmada. Es OBLIGATORIO que el frontend mantenga una sesión WSS real y actualice su indicador a partir de apertura, error, cierre y reconexión. Implementa esa funcionalidad de modo modular sin crear el módulo de monitoreo. Una conexión WebSocket del navegador NO equivale a un vehículo físico conectado; en el futuro, el estado del ESP8266/ESP32 dependerá de señales verificables del dispositivo.
+
+SEGURIDAD Y RESILIENCIA: La página pública funcionará mediante HTTPS y los sockets mediante WSS; identifica y evita mixed content. Ten en cuenta CORS del origen GitHub Pages y los métodos autorizados. No expliques CORS como mecanismo de autenticación. Nunca publiques contraseñas, tokens privilegiados, claves AWS o datos de RDS en archivos públicos; si se requiere autenticación, plantea un mecanismo válido para cliente público según la API. Valida comandos, trata JSON remoto como no confiable, evita inyección DOM, implementa manejo de errores de red y respuestas tardías. Diferencia la sesión WSS real del navegador, la API AWS comprobada con una operación de salud y RDS comprobada únicamente mediante un diagnóstico seguro del backend. Si no existe este diagnóstico de RDS, muestra «Sin verificar». No marques al vehículo físico «en línea» solo porque WSS o la API contestan; tampoco publiques credenciales de RDS ni conexiones MySQL en el navegador.
+
+CALIDAD: Emplea JavaScript ES6+ y módulos nativos, separación de responsabilidades, componentes reutilizables, nombres claros, comentarios solo cuando aporten valor, documentación README, archivos organizados y commits recomendados. Incluye navegación por teclado, foco visible, soporte táctil, contraste adecuado, áreas táctiles accesibles y mensajes comprensibles. No uses dependencias innecesarias. Verifica que los paths funcionen en una subruta de GitHub Pages y evita errores de consola.
+
+SALIDAS QUE DEBES GENERAR: (1) mapa de arquitectura y flujo de datos; (2) árbol de carpetas/archivos; (3) código íntegro, consistente y separado por archivo, sin fragmentos faltantes; (4) configuración de URL base y endpoints sin secretos; (5) instrucciones para ejecución local; (6) guía de publicación en GitHub Pages; (7) casos de prueba paso a paso para joystick, botones, DETENER, DEMO, errores, diseño móvil y verificación independiente WebSocket; (8) README; (9) checklist de seguridad, accesibilidad y errores; (10) panel de tres indicadores de conectividad con verificación real, cambios de estado, desconexión y reconexión: WebSocket WSS, servidor AWS con 21 APIs y Amazon RDS. Entrega cada archivo claramente identificado y explica cómo se relaciona con los demás. Si la documentación de mi API cambia, adapta el cliente sin inventar contratos. Incluye los archivos necesarios para un favicon funcional, su referencia en HTML, y un footer responsivo con los créditos del estudiante. Verifica ambos elementos en GitHub Pages.
+
+FORMA DE TRABAJO: Primero valida el contrato real de mi API y presenta la estructura del proyecto. Después genera todos los archivos necesarios por módulos y explícame dónde colocarlos. Al finalizar, revisa coherencia de importaciones, eventos del joystick, manejo de Fetch, duplicación de POST, cancelación, seguridad, compatibilidad GitHub Pages y cumplimiento de los criterios. No afirmes que realizaste pruebas de red o hardware que no ejecutaste realmente.
+
+9. Criterios de aceptación
+Interfaz intuitiva, moderna, clara y responsiva, con pruebas desde un teléfono móvil físico. Debe incluir favicon propio y créditos del desarrollador al pie de la interfaz.
+Joystick, controles y DETENER funcionales mediante REST contra la API existente en AWS.
+Eventos individuales observables y correlacionables en un cliente WebSocket externo.
+DEMO existentes consultables y ejecutables; eventos temporizados de DEMO comprobables por WebSocket y cancelación cuando la API lo permita.
+Indicadores reales y diferenciados del WebSocket del navegador, del servidor AWS de 21 APIs y de RDS solo si hay diagnóstico seguro; estados y recuperación ante desconexiones, modularidad, manejo de errores y ausencia de secretos públicos.
+Sitio HTTPS publicado en GitHub Pages, repositorio completo y PDF de evidencias con URLs verificables.
+Límite de la práctica: no conectar motores ni microcontroladores; no desarrollar módulos de monitoreo o administración; no migrar a Vercel. La validación del control concluye con la respuesta de la API y la verificación independiente del evento WebSocket. Se verificará la conexión del navegador con WebSocket, no la presencia física del microcontrolador. El estado de la base de datos únicamente podrá informarse como disponible cuando exista comprobación real y segura mediante la API.
+
+
+Implementación de soluciones IoT  |  4.1 Aplicación de control para IoT  |  M.C. Víctor Manuel Pinedo Fernández  |  Página  de
