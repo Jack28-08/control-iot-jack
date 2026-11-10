@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#091523" />
+  <meta name="description" content="Consola de control IoT: joystick táctil, comandos REST, DEMO y diagnóstico WSS, AWS y Amazon RDS." />
+  <title>NODE/01 — Control IoT</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/styles.css?v=1.1.1" />
+  <script type="module" src="./js/main.js"></script>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="top-stripe" aria-hidden="true"></div>
+    <header class="site-header container-xxl">
+      <a class="brand" href="./" aria-label="NODE/01, inicio del control IoT">
+        <span class="brand-emblem"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 20h20M10 20V9h12v11M13 13h6M8 25h16M16 3v5"/></svg></span>
+        <span><strong>NODE<span class="brand-accent">/01</span></strong><small>CONTROL SYSTEMS</small></span>
+      </a>
+      <div class="header-actions">
+        <span class="header-mode"><span class="mode-dot"></span> CONTROL REMOTO</span>
+        <button class="btn-ghost" id="credentialsButton" type="button" aria-haspopup="dialog"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10a4 4 0 1 1 7.5 2L22 18v3h-3v-2h-3v-2h-3l-2-2"/><circle cx="8" cy="10" r="1"/></svg><span>Acceso</span></button>
+      </div>
+    </header>
+
+    <main class="container-xxl main-content">
+      <section class="intro-area" aria-labelledby="pageTitle">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> SISTEMA DE OPERACIÓN <span class="eyebrow-index">/ 04.1</span></div>
+          <h1 id="pageTitle">Controla tu <em>vehículo.</em></h1>
+          <p class="subtitle">Una consola. Todas las maniobras. Integración directa con tu infraestructura en AWS.</p>
+        </div>
+        <div class="unit-mark"><span>UNIDAD ACTIVA</span><strong>01<span class="unit-slash">/</span>IoT</strong><span id="unitName">Conectando con catálogo…</span></div>
+      </section>
+
+      <section aria-label="Estados de conectividad" class="status-section">
+        <div class="connection-tools"><span>Estados verificados por separado</span><button id="retryConnectionButton" class="btn-ghost" type="button">↻ Reintentar conexión</button></div>
+        <div class="status-grid">
+          <div class="status-tile" data-kind="ws">
+            <div class="status-icon"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M3 8a13 13 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r="1"/></svg></div>
+            <div><span class="tile-label">WEBSOCKET WSS</span><strong id="wsStatus" role="status" aria-live="polite">Conectando</strong><small>Conexión de este navegador</small></div>
+            <span class="tile-indicator" id="wsLight" aria-hidden="true"></span>
+          </div>
+          <div class="status-tile" data-kind="api">
+            <div class="status-icon"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.1M8 17h.1"/></svg></div>
+            <div><span class="tile-label">API AWS · 21 SERVICIOS</span><strong id="apiStatus" role="status" aria-live="polite">Comprobando</strong><small>GET /health · salud del servicio</small></div>
+            <span class="tile-indicator" id="apiLight" aria-hidden="true"></span>
+          </div>
+          <div class="status-tile" data-kind="db">
+            <div class="status-icon"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></svg></div>
+            <div><span class="tile-label">AMAZON RDS</span><strong id="dbStatus" role="status" aria-live="polite">Sin verificar</strong><small>Diagnóstico independiente</small></div>
+            <span class="tile-indicator" id="dbLight" aria-hidden="true"></span>
+          </div>
+        </div>
+      </section>
+
+      <div class="row g-4 workspace">
+        <section class="col-xl-7" aria-labelledby="joystickTitle">
+          <div class="panel control-panel">
+            <div class="panel-head"><div><span class="section-kicker">01 / NAVEGACIÓN</span><h2 id="joystickTitle">Joystick virtual</h2></div><div class="panel-tag">MOUSE + TOUCH</div></div>
+            <div class="control-stage">
+              <div class="stage-crosshair stage-crosshair-1" aria-hidden="true"></div>
+              <div class="stage-crosshair stage-crosshair-2" aria-hidden="true"></div>
+              <div class="joystick-boundary" id="joystick" role="group" tabindex="0" aria-disabled="true" aria-label="Joystick virtual" aria-describedby="joystickHelp">
+                <div class="joystick-bezel"><span class="axis top">↑</span><span class="axis bottom">↓</span><span class="axis left">←</span><span class="axis right">→</span><div class="joystick-cross"></div><div class="joystick-stick" id="joystickStick"><span class="joystick-led"></span></div></div>
+              </div>
+              <div class="stage-corner stage-corner-tl" aria-hidden="true"></div><div class="stage-corner stage-corner-br" aria-hidden="true"></div>
+            </div>
+            <div class="joystick-foot"><div class="movement-badge"><span class="movement-icon">↗</span><div><span>ESTADO DEL CONTROL</span><strong id="movementDisplay" aria-live="polite">NEUTRAL</strong></div></div><p id="joystickHelp">Arrastra o usa las flechas. Al soltar, perder foco o pulsar Escape se solicita <strong>DETENER</strong>.</p></div>
+            <button id="stopButton" class="stop-button" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" /></svg><span>DETENER</span><small>PRIORIDAD MÁXIMA</small></button>
+            <div class="warning-foot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3ZM12 10v5M12 18v.1"/></svg><span>Las acciones se solicitan por API; esta pantalla no certifica movimiento físico.</span></div>
+          </div>
+        </section>
+
+        <section class="col-xl-5" aria-label="Comandos y secuencias">
+          <div class="stacked-panels">
+            <div class="panel buttons-panel"><div class="panel-head"><div><span class="section-kicker">02 / ACCIONES</span><h2>Comandos</h2></div><div class="panel-tag" id="commandsCount">0 COMANDOS</div></div>
+              <div class="control-buttons" id="commandButtons" aria-live="polite"><p class="empty-state">Esperando el catálogo real del vehículo…</p></div>
+              <p class="mini-note">Comandos del catálogo real. GI dirige a la izquierda. DEMO DEL CONTROL envía ese comando individual; las secuencias de abajo se ejecutan en AWS.</p>
+            </div>
+            <div class="panel demo-panel"><div class="panel-head"><div><span class="section-kicker">03 / AUTOMATIZACIÓN</span><h2>Secuencias DEMO</h2></div><div class="panel-tag">DESDE RDS</div></div>
+              <label class="field-label" for="demoSelect">SELECCIONAR SECUENCIA</label>
+              <select class="form-select custom-select" id="demoSelect" aria-label="Seleccionar demo"><option value="">Cargando secuencias…</option></select>
+              <div class="demo-info"><div><span>PLAN DE EJECUCIÓN</span><strong id="demoCount">— MOVIMIENTOS</strong></div><small id="demoDuration">Duración pendiente</small></div>
+              <div class="demo-steps" id="demoSteps"><p class="empty-state">El orden y los tiempos se cargan desde RDS.</p></div>
+              <div class="demo-actions"><button class="action-primary" id="startDemoButton" type="button" disabled><span>▶</span> Iniciar DEMO</button><button class="action-secondary" id="cancelDemoButton" type="button" disabled><span>×</span> Cancelar</button></div>
+              <p class="mini-note">El servidor ejecuta y temporiza la secuencia; el navegador sólo la inicia, observa y puede cancelarla.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="feedback-panel" aria-label="Respuesta de operación">
+        <div class="feedback-mark">LIVE<span></span></div>
+        <div class="feedback-text"><small>ESTADO DE LA SOLICITUD</small><strong id="operationState" role="status" aria-live="polite">Conecta la API para comenzar</strong><p id="operationDetail">Se distingue entre petición enviada, HTTP aceptado y evento recibido.</p></div>
+        <span id="operationTime" class="feedback-time">--:--:--</span>
+      </section>
+
+      <div id="notice" class="notice" role="alert" aria-live="assertive" hidden></div>
+
+      <footer class="site-footer"><span>NODE/01 <span class="footer-separator">/</span> IMPLEMENTACIÓN DE SOLUCIONES IoT</span><span>Desarrollado por José Héctor Rosales Cabrera · 2026</span></footer>
+    </main>
+  </div>
+
+  <dialog class="access-dialog" id="authDialog" aria-labelledby="authTitle">
+    <form method="dialog" id="accessForm">
+      <div class="dialog-kicker">ACCESO SEGURO</div>
+      <h2 id="authTitle">Clave de operador</h2>
+      <p>Introduce la clave autorizada para enviar movimientos y controlar DEMO. Se guarda <strong>únicamente en memoria</strong> y se borra al recargar o cerrar la página.</p>
+      <label for="keyInput" class="field-label">X-API-Key</label>
+      <input id="keyInput" type="password" class="form-control dialog-input" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu clave de operador" />
+      <div class="dialog-actions"><button type="button" id="clearKeyButton" class="action-secondary">Borrar clave</button><button type="button" id="saveKeyButton" class="action-primary">Usar clave</button></div>
+      <button class="dialog-close" type="submit" aria-label="Cerrar ventana">×</button>
+    </form>
+  </dialog>
+</body>
+</html>
