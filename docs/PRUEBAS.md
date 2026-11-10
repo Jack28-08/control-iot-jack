@@ -13,7 +13,7 @@ Guía cotejada con [el enunciado institucional](./Enunciado_Practica_4_1_IoT.txt
 - [ ] Teléfono físico y segundo navegador.
 - [ ] Respuesta real de AWS, RDS, certificado, CORS y WSS en línea.
 - [ ] POST de movimiento, STOP y DEMO, pendientes de autorización explícita.
-- [ ] Publicación GitHub/Pages, pendiente de autorización.
+- [x] Repositorio público y GitHub Pages publicados con autorización; HTTPS y recursos relativos verificados.
 
 Las capturas auténticas están en `evidencias/`, excluidas de Git/Pages: `02-desktop.jpg`, `02-movil-vertical.jpg`, `02-movil-horizontal.jpg`, sus variantes `-viewport` legibles y `06-conexion-sin-verificar.jpg`. Muestran la aplicación real local, sin catálogos inventados. La emulación no sustituye un teléfono real; una captura del estado sin verificar no demuestra caída y recuperación completas.
 
@@ -84,18 +84,19 @@ El [diagnóstico medido](./DIAGNOSTICO_RED.md) no demuestra un fallo de RDS ni p
 
 - [ ] Captura de teléfono real con la URL pública completa funcionando.
 - [ ] Favicon en pestaña y créditos al final del contenido.
-- [ ] Repositorio público del frontend y configuración Pages **main → raíz**.
-- [ ] Certificado HTTPS válido y GET de recursos relativos sin errores desde la subruta.
+- [x] Repositorio público del frontend y configuración Pages **main → raíz**.
+- [x] Certificado HTTPS válido y GET de recursos relativos con HTTP 200 desde la subruta.
 
-Destinos previstos hasta verificarlos: `https://jack28-08.github.io/control-iot-jack/` y `https://github.com/Jack28-08/control-iot-jack`. No presentarlos como publicados por existir en un README. No publicar capturas, Word/PDF ni material local excluido de Git.
+Destinos publicados y verificados: `https://jack28-08.github.io/control-iot-jack/` y `https://github.com/Jack28-08/control-iot-jack`. No presentarlos como publicados por existir en un README. No publicar capturas, Word/PDF ni material local excluido de Git.
 
 ## Entrega institucional
 
-- [ ] URL Pages verificada y URL GitHub verificada, completas y clicables en PDF.
+- [x] URL Pages y URL GitHub verificadas, completas y clicables en el informe.
 - [x] Portada de referencia adaptada con los datos académicos proporcionados, sin semestre/grupo inventados.
 - [ ] Siete evidencias completas con descripciones que indiquen lo realmente observado.
 - [x] Word editable conservado en `entregables/`.
-- [ ] Exportación de **Word a PDF**, apertura y revisión visual final. El PDF independiente de avance no sustituye la exportación exigida por el punto 15.3.
+- [x] PDF exportado del DOCX mediante WPS y revisado visualmente en sus ocho páginas.
+- [ ] Cotejo y exportación específica en **Microsoft Word**, exigidos por el punto 15.3; WPS es la aplicación registrada en esta computadora.
 - [x] Conclusiones de avance en primera persona, distinguiendo pruebas locales de integración pendiente.
 
-La carpeta `entregables/` contiene un informe de avance, no la certificación de entrega completa. El entorno carece del renderizador Word/LibreOffice bundled: el PDF de avance se genera y revisa por separado; debe exportarse desde el editable con la herramienta institucional antes del cierre, salvo que se complete y documente una exportación nativa posterior.
+La carpeta `entregables/` contiene un informe de avance, no la certificación de entrega completa. Se exporta el DOCX a PDF con WPS, la aplicación registrada en esta PC, y se revisan las páginas resultantes. El cotejo específico en Microsoft Word del punto 15.3 sigue pendiente. Las capturas públicas 07-pages-* muestran la página real y emulación de tamaño, sin teléfono físico ni POST.

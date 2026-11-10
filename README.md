@@ -113,14 +113,14 @@ docs/                   Guías, CORS propuesto y diagnóstico medido
 
 ## GitHub Pages
 
-El repositorio local está separado del backend y tiene rama `main`. La cuenta GitHub autenticada fue comprobada como `Jack28-08`. La consulta del destino devolvió 404 durante la preparación; todavía no se creó ni publicó.
+El repositorio público del frontend se creó y publicó con autorización en `Jack28-08/control-iot-jack`, separado del backend. Pages está construido desde `main` y `/`, con HTTPS obligatorio. La URL pública devolvió HTTP 200 con validación TLS correcta; JavaScript, CSS y favicon respondieron 200. Ver [PUBLICACION](./docs/PUBLICACION.md).
 
-Destinos **previstos, pendientes de publicación y verificación**:
+Destinos **publicados y verificados**:
 
 - Repositorio: [https://github.com/Jack28-08/control-iot-jack](https://github.com/Jack28-08/control-iot-jack).
 - Página: [https://jack28-08.github.io/control-iot-jack/](https://jack28-08.github.io/control-iot-jack/).
 
-[DESPLIEGUE](./docs/DESPLIEGUE.md) contiene los comandos exactos de PowerShell con `gh`, validación del remoto y configuración **main → raíz**. La creación/push/publicación requieren la autorización solicitada por el alumno. Sólo se publica el frontend; no Vercel ni backend. Rutas relativas, `.nojekyll`, favicon SVG propio y footer `Desarrollado por José Héctor Rosales Cabrera · 2026` están conservados.
+[DESPLIEGUE](./docs/DESPLIEGUE.md) contiene los comandos exactos de PowerShell con `gh`, validación del remoto y configuración **main → raíz**. La creación, push y publicación ya se realizaron con autorización expresa del alumno. La guía conserva los comandos reproducibles. Sólo se publica el frontend; no Vercel ni backend. Rutas relativas, `.nojekyll`, favicon SVG propio y footer `Desarrollado por José Héctor Rosales Cabrera · 2026` están conservados.
 
 ### CORS pendiente
 
@@ -128,4 +128,4 @@ El `app/main.py` revisado no declara CORSMiddleware. Sin respuesta HTTPS no se p
 
 ## Evidencias y entrega
 
-Seguir [las siete evidencias](./docs/PRUEBAS.md). Faltan teléfono físico, CORS con respuesta real, certificado, GET de catálogos y todos los pasos, WSS en línea y cliente WS independiente, POST autorizados, inicio202/orden/fin/cancelación DEMO, comprobación real de ausencia de historial y publicación Pages. El PDF y Word actuales documentan únicamente lo realizado y los pendientes. El cierre requiere URLs públicas verificadas y capturas auténticas de esas pruebas.
+Seguir [las siete evidencias](./docs/PRUEBAS.md). Faltan teléfono físico, CORS con respuesta real, certificado, GET de catálogos y todos los pasos, WSS en línea y cliente WS independiente, POST autorizados, inicio202/orden/fin/cancelación DEMO, comprobación real de ausencia de historial; Pages ya está publicado. El PDF y DOCX actuales documentan lo realizado y lo pendiente, con las URLs públicas verificadas. El PDF se exporta del editable mediante WPS, la automatización registrada en esta PC; falta cotejo específico en Microsoft Word. El cierre requiere las capturas auténticas de operación y teléfono real.
