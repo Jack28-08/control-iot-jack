@@ -18,9 +18,11 @@ test('demo calcula duraciones y pausas desde RDS',()=>{
  assert.equal(computeDemoDuration([{duracion_ms:2000,pausa_ms:400},{duracion_ms:1000,pausa_ms:0}]),3400);
 });
 test('wss ignora otros vehiculos y tramas invalidas',()=>{
- assert.equal(safeEventPayload('{"tipo":"movimiento_individual","id_vehiculo":2}',1),null);
+ const event={tipo:'movimiento_individual',id_vehiculo:1,id_comando:2,fecha_hora:'2026-11-13T14:00:00Z'};
+ assert.equal(safeEventPayload(JSON.stringify({...event,id_vehiculo:2}),1),null);
  assert.equal(safeEventPayload('NOT_JSON',1),null);
- assert.equal(safeEventPayload('{"tipo":"movimiento_individual","id_vehiculo":1}',1).tipo,'movimiento_individual');
+ assert.equal(safeEventPayload(JSON.stringify({...event,id_comando:null}),1),null);
+ assert.equal(safeEventPayload(JSON.stringify(event),1).tipo,'movimiento_individual');
 });
 test('rutas verificadas corresponden al backend',()=>{
  assert.equal(PATHS.movement(VEHICLE_ID),'/vehiculos/1/movimientos');

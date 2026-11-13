@@ -12,10 +12,13 @@ export const REQUEST_TIMEOUT_MS = 12000;
 export const PATHS = Object.freeze({
   vehicle: id => `/vehiculos/${id}`,
   commands: id => `/vehiculos/${id}/comandos`,
+  state: id => `/vehiculos/${id}/estado`,
+  history: id => `/vehiculos/${id}/historial`,
   demos: id => `/vehiculos/${id}/demos`,
   demoSteps: (id,demo) => `/vehiculos/${id}/demos/${demo}/movimientos`,
   movement: id => `/vehiculos/${id}/movimientos`,
   startDemo: (id,demo) => `/vehiculos/${id}/demos/${demo}/iniciar`,
   cancelDemo: (id,demo) => `/vehiculos/${id}/demos/${demo}/cancelar`,
   stop: id => `/vehiculos/${id}/detener`,
+  evaluation: id => `/evaluacion/vehiculos/${id}`,
 });

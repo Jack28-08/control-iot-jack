@@ -26,7 +26,7 @@ test('start idempotente y close ignora eventos tardíos de una conexión anterio
   assert.equal(h.sockets.length,1);
   const old=h.sockets[0];old.emit('open');assert.equal(h.statuses.at(-1),'En línea');
   h.client.close();
-  old.emit('open');old.emit('message',{data:JSON.stringify({tipo:'estado_inicial',id_vehiculo:1})});
+  old.emit('open');old.emit('message',{data:JSON.stringify({tipo:'estado_inicial',id_vehiculo:1,fecha_hora:'2026-11-13T14:00:00Z'})});
   assert.equal(h.statuses.at(-1),'Desconectado');assert.equal(h.events.length,0);
   assert.equal(h.timers.size,0);assert.equal(old.closed,true);
   h.client.start();assert.equal(h.sockets.length,2);
@@ -47,8 +47,9 @@ test('constructor WebSocket fallido reconecta y mensajes se filtran por vehícul
   assert.equal(h.statuses.at(-1),'Desconectado');assert.equal(h.timers.size,1);
   h.setThrow(false);h.tick();const socket=h.sockets[0];
   socket.emit('message',{data:'invalid'});
-  socket.emit('message',{data:JSON.stringify({tipo:'estado_inicial',id_vehiculo:2})});
-  socket.emit('message',{data:JSON.stringify({tipo:'estado_inicial',id_vehiculo:1})});
+  const event={tipo:'estado_inicial',id_vehiculo:1,fecha_hora:'2026-11-13T14:00:00Z'};
+  socket.emit('message',{data:JSON.stringify({...event,id_vehiculo:2})});
+  socket.emit('message',{data:JSON.stringify(event)});
   assert.equal(h.events.length,1);assert.equal(h.events[0].id_vehiculo,1);
   h.client.close();
 });

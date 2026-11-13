@@ -135,3 +135,20 @@ test('rechazo de dirección centra sin emitir STOP ni permitir reactivación',t=
   h.pointer('pointermove',100,150);
   assert.deepEqual(h.directions,['right']);assert.equal(h.releases,0);assert.equal(h.el.capture,null);
 });
+
+test('el joystick compacto limita el recorrido y conserva neutral y STOP',t=>{
+  const h=setup(t);
+  h.el.getBoundingClientRect=()=>({left:0,top:0,width:100,height:100});
+  h.pointer('pointerdown',62,50,{pointerType:'touch'});
+  assert.deepEqual(h.directions,[]);
+  h.pointer('pointermove',95,50,{pointerType:'touch'});
+  assert.deepEqual(h.directions,['right']);
+  assert.equal(h.knob.style.transform,'translate(24px, 0px)');
+  h.pointer('pointermove',58,50,{pointerType:'touch'});
+  h.pointer('pointerup',58,50,{pointerType:'touch'});
+  assert.equal(h.releases,1);
+  h.key('keydown','ArrowLeft');
+  assert.equal(h.knob.style.transform,'translate(-24px, 0px)');
+  h.key('keyup','ArrowLeft');
+  assert.equal(h.releases,2);
+});

@@ -2,7 +2,7 @@
 export class ControlSession {
   constructor(api, view={}) {
     this.api=api;
-    this.view={change(){},operation(){},movement(){},step(){},neutral(){},...view};
+    this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},...view};
     this.state={commands:[],selectedDemo:null,stepsReady:false,demoActive:false,demoBusy:false,
       movementBusy:false,stopBusy:false,pending:null,lastRequested:null,activeDemoId:null,
       execution:null,lastOrder:0,uncertain:false,movementPhase:'idle'};
@@ -24,6 +24,7 @@ export class ControlSession {
       const result=await this.api.move(command.id_comando,controller.signal);
       if(epoch!==this.epoch)return;
       if(result?.id_comando!==command.id_comando)throw Error('La respuesta no corresponde al comando solicitado.');
+      this.view.confirmed(result);
       if(s.movementPhase!=='received'){
         s.movementPhase='accepted';
         this.view.operation(`${command.nombre} · aceptado por API`,'HTTP confirmado; WSS es independiente y no confirma motores físicos.');

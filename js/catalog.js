@@ -1,3 +1,5 @@
+import {validEvent} from './protocol.js';
+
 // El catálogo final SIEMPRE proviene de GET /vehiculos/{id}/comandos.
 // Esta tabla sólo decide cómo se etiqueta cada acción conocida para la interfaz.
 export const LABELS = Object.freeze({
@@ -36,7 +38,6 @@ export function safeEventPayload(raw, vehicleId){
   if(typeof raw!=='string' || raw.length>65536)return null;
   try {
     const v=JSON.parse(raw);
-    if(!v||typeof v!=='object'||Array.isArray(v)||v.id_vehiculo!==vehicleId||typeof v.tipo!=='string')return null;
-    return v;
+    return validEvent(v,vehicleId)?v:null;
   }catch{return null;}
 }

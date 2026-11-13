@@ -78,3 +78,61 @@ test('JSON inválido y fallo de red tienen errores distintos',async t=>{
   network=true;
   await assert.rejects(api.health(),e=>e.code==='network'&&e.status===0);
 });
+
+const sampleToken='t'.repeat(43);
+const session=()=>({token:sampleToken,expires_at:new Date(Date.now()+60000).toISOString()});
+
+test('sesión temporal va sólo a los POST de control y el operador puede usar su clave en memoria',async t=>{
+  const calls=[];
+  fakeFetch(t,async(url,options)=>{
+    calls.push([new URL(url),options]);
+    return url.includes('/evaluacion/')?json(session()):json({},url.endsWith('/iniciar')?202:200);
+  });
+  const api=new ApiClient();
+  const [a,b]=await Promise.all([api.evaluation(),api.evaluation()]);
+  assert.equal(a&&b,true);
+  await api.state();await api.history();
+  await api.move(42);await api.startDemo(3);await api.cancelDemo(3);await api.stop();
+  api.setKey('test-operator');await api.stop();
+  assert.deepEqual(calls.map(([url,o])=>[url.pathname,o.method,o.headers.Authorization]),[
+    ['/evaluacion/vehiculos/1','GET',undefined],
+    ['/vehiculos/1/estado','GET',undefined],
+    ['/vehiculos/1/historial','GET',undefined],
+    ['/vehiculos/1/movimientos','POST',`Bearer ${sampleToken}`],
+    ['/vehiculos/1/demos/3/iniciar','POST',`Bearer ${sampleToken}`],
+    ['/vehiculos/1/demos/3/cancelar','POST',`Bearer ${sampleToken}`],
+    ['/vehiculos/1/detener','POST',`Bearer ${sampleToken}`],
+    ['/vehiculos/1/detener','POST',undefined],
+  ]);
+  assert.equal(calls.at(-1)[1].headers['X-API-Key'],'test-operator');
+  assert(calls.every(([url,o])=>url.protocol==='https:'&&o.credentials==='omit'&&o.redirect==='error'));
+});
+
+test('revocación del POST borra el token aun si el error no es JSON y no repite órdenes',async t=>{
+  let release,gets=0,posts=0;
+  fakeFetch(t,async(_url,{method})=>{
+    if(method==='POST'){posts++;return new Response('Denied',{status:403});}
+    if(++gets===1)return json(session());
+    return new Promise(resolve=>{release=()=>resolve(json(session()));});
+  });
+  const api=new ApiClient();
+  assert(await api.evaluation());
+  const renewal=api.evaluation({force:true});
+  await assert.rejects(api.stop(),e=>e.status===403);
+  release();
+  assert.equal(await renewal,false);
+  assert.equal(api.hasAccess,false);
+  assert.equal(api.evaluationStatus,'closed');
+  await assert.rejects(api.stop(),e=>e.code==='auth_missing');
+  assert.equal(posts,1);
+});
+
+test('sesiones expiradas o con fecha inválida mantienen la app en lectura',async t=>{
+  let expiration='2026-11-13T00:00:00';
+  fakeFetch(t,async()=>json({...session(),expires_at:expiration}));
+  const api=new ApiClient();
+  assert.equal(await api.evaluation(),false);
+  expiration=new Date(Date.now()-1000).toISOString();
+  assert.equal(await api.evaluation(),false);
+  assert.equal(api.hasAccess,false);
+});

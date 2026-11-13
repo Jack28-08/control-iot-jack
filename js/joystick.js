@@ -2,6 +2,12 @@ import {directionForVector, KEY_DIRECTIONS} from './catalog.js';
 export function initJoystick(onDirection,onRelease,{isEnabled=()=>true}={}){
   const el=document.querySelector('#joystick');
   const knob=document.querySelector('#joystickStick');
+  const geometry=({width,height}=el.getBoundingClientRect())=>{
+    const size=Math.min(width,height);
+    // Los límites originales siguen siendo el máximo; una consola compacta escala el gesto.
+    return {travel:Math.min(46,size*.24),enter:Math.min(33,size*.165),
+      exit:Math.min(25,size*.125),diagonal:Math.min(12,size*.06)};
+  };
   let pointer=null, direction=null, key=null;
   const heldKeys=new Set();
   const moveVisual=(x,y)=>{knob.style.transform=`translate(${x}px, ${y}px)`;};
@@ -24,15 +30,16 @@ export function initJoystick(onDirection,onRelease,{isEnabled=()=>true}={}){
   const update=(ev)=>{
     const bounds=el.getBoundingClientRect(),cX=bounds.left+bounds.width/2,cY=bounds.top+bounds.height/2;
     const dx=ev.clientX-cX,dy=ev.clientY-cY;
-    const max=46, length=Math.hypot(dx,dy), scale=length>max?max/length:1;
+    const {travel,enter,exit,diagonal}=geometry(bounds);
+    const length=Math.hypot(dx,dy),scale=length>travel?travel/length:1;
     const x=dx*scale,y=dy*scale;
     moveVisual(x,y);
     // Histéresis: evita alternancias por unos píxeles en neutral o diagonales.
-    let next=directionForVector(dx,dy,direction?25:33);
+    let next=directionForVector(dx,dy,direction?exit:enter);
     if(direction&&next&&next!==direction){
       const horizontal=direction==='left'||direction==='right';
       const nextHorizontal=next==='left'||next==='right';
-      if(horizontal!==nextHorizontal&&Math.abs(Math.abs(dx)-Math.abs(dy))<12)next=direction;
+      if(horizontal!==nextHorizontal&&Math.abs(Math.abs(dx)-Math.abs(dy))<diagonal)next=direction;
     }
     apply(next);
   };
@@ -61,7 +68,8 @@ export function initJoystick(onDirection,onRelease,{isEnabled=()=>true}={}){
       if(!isEnabled()){neutral();return;}
       if(pointer!==null||ev.repeat||heldKeys.has(ev.key))return;
       heldKeys.add(ev.key);key=ev.key;
-      const vectors={up:[0,-46],down:[0,46],left:[-46,0],right:[46,0]};
+      const {travel}=geometry();
+      const vectors={up:[0,-travel],down:[0,travel],left:[-travel,0],right:[travel,0]};
       moveVisual(...vectors[d]);apply(d);
     }
     if(ev.key==='Escape'||ev.key===' '){ev.preventDefault();neutral({notify:true});}
