@@ -53,3 +53,20 @@ test('constructor WebSocket fallido reconecta y mensajes se filtran por vehícul
   assert.equal(h.events.length,1);assert.equal(h.events[0].id_vehiculo,1);
   h.client.close();
 });
+
+test('una conexión WSS sin handshake vence y reconecta sin aceptar apertura tardía',t=>{
+  const h=harness(t);h.client.start();
+  const first=h.sockets[0];
+  assert.equal([...h.timers.values()][0].delay,12000);
+  h.tick();
+  assert.equal(first.closed,true);
+  assert.equal(h.statuses.at(-1),'Desconectado');
+  first.emit('open');
+  assert.equal(h.statuses.at(-1),'Desconectado');
+  h.tick();
+  assert.equal(h.sockets.length,2);
+  h.sockets[1].emit('open');
+  assert.equal(h.statuses.at(-1),'En línea');
+  assert.equal(h.timers.size,0);
+  h.client.close();
+});
