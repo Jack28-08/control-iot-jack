@@ -67,4 +67,6 @@ El frontend solo guarda el token corto en RAM y solo lo envía al servidor. Los 
 
 El 13 de noviembre de 2026 pasaron 71 pruebas unitarias del frontend y 14 escenarios en Chromium con REST y WSS simulados. El navegador verificó Control, Secuencias y Monitoreo en diez tamaños, el reflujo al ampliar y la actualización entre dos pestañas. En la rama de evaluación pasaron 179 pruebas locales del backend.
 
-Desde esta PC, la conexión a `/health` agotó el tiempo sin respuesta HTTP. RDS quedó sin verificar y la ventana de evaluación sigue pendiente de despliegue. El [recorrido de verificación](./docs/VERIFICACION_4_2.md) detalla las comprobaciones de REST y WSS reales, Control supervisado y teléfono físico.
+En la primera consulta desde esta PC, la conexión a `/health` agotó el tiempo sin respuesta HTTP y RDS quedó «Sin verificar». En una comprobación posterior, `/health`, `/health/db`, Swagger, estado, historial, catálogo y pasos de la DEMO respondieron HTTP 200. El historial devolvió diez filas del vehículo 1 en orden descendente, sin IDs repetidos. Tanto Monitoreo publicado como un cliente WSS independiente recibieron el estado inicial.
+
+El acceso de evaluación sigue pendiente de despliegue en EC2. En la API pública, el GET de sesión respondió HTTP 404. El [recorrido de verificación](./docs/VERIFICACION_4_2.md) describe cómo completar las comprobaciones supervisadas de movimiento y DEMO, el historial tras nuevos registros y la prueba en un teléfono físico.
