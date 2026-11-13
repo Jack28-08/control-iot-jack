@@ -1,0 +1,276 @@
+PRACTICA 4.2 - APLICACION DE MONITOREO PARA IoT
+TRANSCRIPCION OPERATIVA DE LOS REQUISITOS VISIBLES EN LAS CAPTURAS DEL ENUNCIADO
+
+AVISO: Este archivo organiza y resume fielmente los requisitos de las capturas
+compartidas del enunciado 4.2. No se presenta como transcripcion literal ni
+como sustituto de un PDF original no proporcionado como archivo. Si el documento
+oficial tiene otras paginas o cambios, contrastar con aquel.
+
+INSTITUCION Y MATERIA
+- Tecnologico Nacional de Mexico, campus Pachuca.
+- Ingenieria en Sistemas Computacionales.
+- Implementacion de soluciones IoT.
+- M.C. Victor Manuel Pinedo Fernandez.
+- Actividad practica 4.2: Aplicacion de monitoreo para IoT.
+- Tema: Ampliacion responsiva de CONTROL con MONITOREO en tiempo real,
+  ultimo movimiento, tabla de 10 registros, REST/WebSocket, AWS, Amazon RDS
+  y GitHub Pages.
+
+1. OBJETIVO
+Ampliar INDIVIDUALMENTE la aplicacion web de CONTROL de la practica 4.1,
+sin sustituirla ni perder sus funciones. Integrar dentro del mismo proyecto
+y repositorio un modulo de MONITOREO en tiempo real. Mostrar de forma
+destacada el ultimo movimiento o estado reportado, con fecha y hora reales
+cuando existan; ademas, presentar los diez movimientos INDIVIDUALES mas
+recientes PERSISTIDOS en Amazon RDS, del mas nuevo al mas antiguo.
+Utilizar WebSocket seguro (WSS) para recibir eventos y actualizar la vista
+sin recargarla. Usar Fetch/async-await para carga inicial, consultas del
+historial y resincronizacion tras reconexion. Mantener los tres indicadores
+independientes de WSS del navegador, disponibilidad del servidor AWS/API
+y diagnostico real de RDS. Conservar Mobile First, favicon, creditos,
+seguridad, accesibilidad, modularidad, pruebas y la misma publicacion
+GitHub Pages.
+
+2. CONTEXTO Y ALCANCE
+- Una plataforma integral contempla CONTROL (4.1), MONITOREO (4.2)
+  y ADMINISTRACION/CONFIGURACION (etapa posterior).
+- La practica 4.2 agrega MONITOREO a CONTROL; no crea un frontend nuevo.
+- Mantener CONTROL completo: joystick, botones, DETENER, DEMO.
+- Backend existente: Python/FastAPI en AWS con POO y 21 APIs REST,
+  WebSocket WSS y MySQL Amazon RDS.
+- Reutilizar contratos y procedimientos existentes. No crear backend,
+  nuevas tablas, procedimientos almacenados ni acceso MySQL desde navegador.
+- No implementar CRUD administrativo, graficas historicas ni usuarios.
+- No migrar a Vercel; publicar en el MISMO proyecto GitHub Pages.
+- El control fisico del ESP8266/ESP32 queda fuera de esta actividad.
+
+3. REGLAS DE NEGOCIO
+3.1 El panel de ultimo movimiento mostrara nombre/identificador real del
+vehiculo cuando este disponible, ultimo movimiento o estado, y fecha/hora
+reales del origen confiable. No fabricar marcas temporales ni confirmar
+actuacion fisica con una respuesta HTTP o evento WSS.
+3.2 Tabla con un MAXIMO de DIEZ movimientos INDIVIDUALES PERSISTIDOS,
+recuperados mediante API, ordenados del mas reciente al mas antiguo.
+Columnas minimas: #, Movimiento, Fecha, Hora. El numero de fila es visual:
+retirar visualmente una fila NO elimina datos de RDS.
+3.3 Al abrir MONITOREO: consulta REST inicial de ultimo estado e historial,
+y sesion WSS real para cambios. Ante WSS se actualiza el panel y se
+resincroniza el historial con la persistencia confirmada, sin hacer polling
+continuo del historial como sustituto de WebSocket.
+3.4 Los eventos internos de DEMO pueden reflejarse en el ultimo estado
+segun el contrato, pero NO deben insertarse en la tabla individual si el
+backend no los persiste ahi.
+3.5 Evitar duplicados, eventos ajenos al vehiculo, orden incorrecto,
+respuestas HTTP atrasadas y nuevas cargas que sean sobreescritas por datos
+antiguos. Tras recuperar WSS volver a obtener estado e historial por REST.
+3.6 Debe demostrarse actualizacion desde CONTROL y desde otra pestana u
+otro cliente externo del mismo vehiculo, SIN recargar MONITOREO.
+3.7 Conservar prioridad de DETENER y prohibir conflictos durante DEMO.
+3.8 Tres indicadores reales e independientes:
+    WSS del navegador: En linea / Conectando-Reconectando / Desconectado.
+    API AWS con 21 servicios: Disponible / Comprobando / No disponible.
+    Amazon RDS: Disponible / No disponible / Sin verificar, exclusivamente
+    cuando haya diagnostico real y seguro del backend.
+    WSS en linea NO equivale a vehiculo fisico conectado. API sana NO
+    demuestra que funcionen los 21 endpoints. No atribuir una falla WSS
+    a RDS sin prueba independiente.
+3.9 Mantener identidad, favicon, creditos, estilos responsive y rutas
+relativas del MISMO GitHub Pages; no publicar secretos.
+
+4. HERRAMIENTAS OBLIGATORIAS
+Visual Studio Code, HTML5 semantico, CSS3, Bootstrap 5, JavaScript ES6+
+modular, Fetch API con async/await, WebSocket nativo WSS, Git/GitHub,
+GitHub Pages, DevTools, Postman/Thunder Client o extension WSS confiable.
+Reutilizar FastAPI, las APIs existentes y Amazon RDS sin recrearlas.
+
+5. DESARROLLO Y COMPROBACION POR ETAPAS
+
+ETAPA 1 - AUDITAR EL PROYECTO Y CONTRATOS REALES
+1.1 Abrir el repositorio original de 4.1 y comprobar joystick, botones,
+    DETENER, DEMO, favicon y creditos. Identificar estructura modular.
+1.2 Verificar Swagger de las APIs reales: ultimo estado, historial,
+    filtros por vehiculo, orden, limite, modelos JSON, errores y diagnostico.
+1.3 Inspeccionar el contrato WSS real: URL, vehiculo, tipos de evento,
+    timestamps, identificadores, mensajes DEMO y movimientos individuales.
+1.4 Comprobar HTTPS, WSS, autenticacion/CORS y correlacion entre API y WSS.
+1.5 Si faltan mecanismos de historial o diagnostico, identificar
+    impedimentos sin inventar propiedades ni endpoints.
+
+ETAPA 2 - AMPLIAR EL MISMO PROYECTO
+2.1 Continuar en MISMO repositorio y rama controlada, respaldar 4.1.
+2.2 Separar modulos de navegacion, monitoreo, cliente REST, WSS compartido,
+    estado ultimo movimiento, historial, sincronizacion y formatos.
+2.3 Mantener rutas compatibles con GitHub Pages y misma configuracion
+    de API, WSS y vehiculo, sin credenciales privadas en archivos publicos.
+2.4 Actualizar README, arquitectura y pruebas.
+
+ETAPA 3 - INTERFAZ MOBILE FIRST
+3.1 Navegacion clara CONTROL / MONITOREO en celular, tableta y escritorio.
+3.2 Mostrar nombre de vehiculo, tarjeta de ultimo movimiento, tabla de diez
+    y tres indicadores. Conservar creditos visibles y favicon original.
+3.3 Contraste, jerarquia, legibilidad, iconos, mensajes vacio/carga/error.
+3.4 Funcionamiento vertical/horizontal y escritorio sin scroll HORIZONTAL
+    de pagina ni corte de columnas esenciales.
+3.5 Foco visible, HTML semantico, etiquetas y accesibilidad tactil/teclado.
+
+ETAPA 4 - ULTIMO MOVIMIENTO
+4.1 Tarjeta destacada: movimiento, vehiculo, fecha/hora reales, codigo o
+    estado si datos existentes en contrato.
+4.2 Cargar estado inicial mediante API real; actualizar con WSS valido.
+4.3 Diferenciar ultimo reportado de movimiento ejecutado fisicamente.
+4.4 Repetidos/retrasados: conservar orden correcto y evitar sobrescritura.
+4.5 Estados claros al faltar datos o conectividad.
+
+ETAPA 5 - TABLA DINAMICA DE DIEZ MOVIMIENTOS
+5.1 Mostrar hasta diez INDIVIDUALES PERSISTIDOS, columnas #,
+    Movimiento, Fecha, Hora, opcional identificador/codigo real.
+5.2 Del mas reciente al mas antiguo. GET real de historial, no memoria
+    inventada como base persistente.
+5.3 WSS relevante -> consultar y reconciliar historial confirmado.
+    Evitar duplicados, datos ajenos, carreras y consultas excesivas.
+5.4 Tabla vacia y mensajes de errores claros; no borrar registros de RDS.
+
+ETAPA 6 - LOS TRES INDICADORES
+6.1 Reutilizar en CONTROL y MONITOREO los estados de WSS, API y RDS.
+6.2 Una conexion WSS real compartida cuando sea viable; reconexion y
+    resincronizacion al recuperar la conexion.
+6.3 Verificar API con endpoint de salud real y timeout moderado; RDS
+    solo con diagnostico seguro, o mostrar Sin verificar.
+
+ETAPA 7 - REST, WSS Y RECONCILIACION
+7.1 Reutilizar cliente REST modular, manejo JSON, errors y AbortController.
+7.2 GET estado e historial real, con filtros y orden del contrato existente.
+7.3 Fechas/horas confiables, zona horaria documentada, no inventar datos.
+7.4 REST de sincronizacion tras reconexion WSS y actualizaciones recibidas.
+7.5 Sin respuestas antiguas que sobreescriban datos nuevos.
+
+ETAPA 8 - EVENTOS WSS Y CLIENTE INDEPENDIENTE
+8.1 Reutilizar WSS real para vehiculo seleccionado, observar eventos con
+    Postman/Thunder/extension externa.
+8.2 Movimiento desde CONTROL -> actualizar panel MONITOREO; historial
+    solo tras confirmacion de persistencia.
+8.3 Accion desde otro cliente/pestana -> actualizar sin recargar.
+8.4 Filtrado y orden, reconexion gradual, evitar duplicados.
+8.5 Registrar evidencia entre REST, WSS y tabla real.
+
+ETAPA 9 - DEMO SIN CONTAMINAR HISTORIAL
+9.1 Mantener consulta/inicio/cancelacion DEMO desde CONTROL.
+9.2 Observar inicio, pasos, finalizacion y cancelacion desde WSS.
+9.3 NO sumar pasos internos de DEMO a historial individual cuando no
+    estan persistidos como registros individuales.
+9.4 DETENER prioritario y operaciones incompatibles bloqueadas.
+9.5 Recuperacion/restablecimiento posterior a DEMO sin duplicados.
+
+ETAPA 10 - HTTPS, WSS Y SEGURIDAD
+10.1 HTTPS para CONTROL/MONITOREO y WSS para WebSocket.
+10.2 CORS REST apropiado y autorizacion WSS, sin confundir CORS con auth.
+10.3 No exponer tokens permanentes, credenciales RDS o claves AWS en
+    JavaScript, JSON, repositorio, capturas o logs.
+10.4 Usar mecanismo de autenticacion previsto por el backend, si aplica.
+10.5 Validar respuestas y no insertar datos no confiables en DOM ni
+    conectar navegador directamente a MySQL.
+
+ETAPA 11 - CALIDAD DE SOFTWARE
+11.1 Modularidad: navegacion, CONTROL, MONITOREO, REST, WSS, historial,
+    conectividad, fechas y utilidades.
+11.2 Estados carga / Sin movimientos / Desconectado / Reconectando /
+    Sin verificar / Error; sin mostrar exito ficticio.
+11.3 HTML y tabla semanticos, navegacion teclado, foco visible,
+    tamanos tactiles y contraste.
+11.4 Probar en movil vertical/horizontal y escritorio, compatibilidad
+    ES6+ y GitHub Pages, consola limpia y CONTROL intacto.
+
+ETAPA 12 - PRUEBAS FUNCIONALES OBLIGATORIAS
+12.1 A: al abrir MONITOREO obtener estado e historial REST reales,
+    incluyendo el caso historial vacio.
+12.2 B: desde CONTROL ejecutar AVANZAR, DERECHA y DETENER; verificar WSS
+    en cliente independiente, tarjeta y tabla sin recargar.
+12.3 C: desde otra pestana/cliente generar movimientos y comprobar
+    actualizacion automatica. Crear mas de 10 movimientos individuales,
+    maximo 10 visibles, orden correcto y sin duplicados.
+12.4 D: interrupcion/recuperacion WSS con resincronizacion REST;
+    comprobar separadamente salud AWS y diagnostico RDS.
+12.5 E: DEMO y su cancelacion; tabla sin pasos internos DEMO cuando
+    no hay persistencia individual; fechas/horas y vista movil.
+12.6 Capturas de DevTools/Network, cliente WSS externo, interfaz, URL
+    y resultados. Declarar limitaciones y evitar afirmar pruebas no hechas.
+
+ETAPA 13 - MISMO GITHUB PAGES
+13.1 Mismo repositorio original con commits descriptivos y README.
+13.2 Verificar rutas relativas, navegador, favicon, navegacion, creditos.
+13.3 Probar version HTTPS en PC y celular real vertical/horizontal.
+13.4 Desde la version PUBLICADA ejecutar movimiento en CONTROL y ver
+    cambio en MONITOREO sin recargar, y verificar indicadores.
+13.5 No publicar segundo frontend ni migrar a Vercel.
+
+6. SIETE EVIDENCIAS MINIMAS (SECCION 14 DEL ENUNCIADO)
+14.1 Evidencia 1: Repositorio ORIGINAL con commits 4.2, estructura modular,
+     nuevas rutas/componentes y README actualizado.
+14.2 Evidencia 2: Vistas CONTROL y MONITOREO en un MISMO sitio, desde movil
+     y escritorio; tarjeta ultimo movimiento, tabla diez, favicon y creditos.
+14.3 Evidencia 3: Carga inicial por REST del ultimo estado y de los diez
+     movimientos reales, con solicitud/respuesta, fechas y horas coherentes.
+14.4 Evidencia 4: Movimiento desde CONTROL, evento WSS independiente y
+     actualizacion SIN RECARGAR del ultimo movimiento y de la tabla.
+14.5 Evidencia 5: Mas de diez movimientos individuales y actualizacion
+     desde otra pestana/cliente; maximo diez filas, orden y sin duplicados.
+14.6 Evidencia 6: Indicadores WSS/AWS/RDS reales, caida/reconexion WSS,
+     resincronizacion REST; DEMO y ausencia de pasos en historial individual.
+14.7 Evidencia 7: URL HTTPS GitHub Pages ACTUALIZADA, URL repositorio
+     ORIGINAL y captura del funcionamiento en telefono fisico con favicon.
+
+7. ENTREGA (SECCION 15 DEL ENUNCIADO)
+Tres elementos:
+(1) URL publica de GitHub Pages con ambas vistas.
+(2) URL del repositorio GitHub ORIGINAL actualizado.
+(3) PDF institucional con siete evidencias verificables y URLs completas.
+
+8. CONCLUSIONES TECNICAS (SECCION 16 DEL ENUNCIADO)
+16.1 Como se extendio CONTROL sin perder joystick, DETENER ni DEMO y como
+     se diseño MONITOREO con ultimo movimiento, tabla y Mobile First.
+16.2 Justificar REST para carga/recuperacion y WSS para eventos en vivo,
+     modularidad y tratamiento de datos persistidos en RDS.
+16.3 Pruebas con WSS externo, cambio desde otra pestana, resincronizacion
+     tras reconexion y validacion independiente AWS/RDS.
+16.4 Diferenciar ultimo estado/evento, registro persistido en historial
+     individual y ejecucion fisica. Explicar por que pasos internos DEMO
+     no aparecen en historial si backend no los registra.
+16.5 Prevencion de duplicados, orden, fechas/horas, fallas de red,
+     accesibilidad, responsividad y reuso para Administracion futura.
+
+9. DESARROLLO CON INTELIGENCIA ARTIFICIAL
+El documento ofrece un prompt maestro de apoyo para desarrollar CONTROL
++ MONITOREO. No entrega codigo terminado ni autoriza a inventar endpoints,
+JSON, timestamps, resultados de pruebas ni credenciales. Deben inspeccionarse
+los contratos reales antes de implementar cada funcionalidad.
+
+10. CRITERIOS FINALES DE ACEPTACION
+- Conservar CONTROL funcional y agregar MONITOREO en MISMO sitio.
+- Mobile First, favicon, creditos y navegacion accesible.
+- Ultimo estado REAL con fecha/hora origen cuando existan, actualizado
+  por WSS sin recargar.
+- Ultimos DIEZ movimientos INDIVIDUALES PERSISTIDOS, mas recientes primero,
+  sin duplicados ni otro vehiculo.
+- CONTROL u otro cliente actualiza MONITOREO automaticamente; WebSocket
+  dispara actualizacion y REST consulta la persistencia real.
+- DEMO no contamina historial individual.
+- Tres indicadores reales separados WSS navegador / AWS API / RDS segura.
+- Recuperacion y sincronizacion despues de caida WSS.
+- GitHub Pages HTTPS en el MISMO repo original, PDF institucional con
+  siete evidencias y URLs verificables.
+- No modificar backend/RDS ni conectarse a motores fisicos en esta etapa.
+
+DATOS DEL PROYECTO DEL ALUMNO (PARA CODEX)
+Repositorio original: https://github.com/Jack28-08/control-iot-jack
+GitHub Pages: https://jack28-08.github.io/control-iot-jack/
+Backend: https://github.com/Jack28-08/api-vehiculo-iot
+Swagger: https://184-72-72-255.sslip.io/docs
+WSS: wss://184-72-72-255.sslip.io/ws/vehiculos/1
+Vehiculo: 1
+
+NOTA DE IMPLEMENTACION ADICIONAL DEL ALUMNO (NO PARTE DEL ENUNCIADO):
+El usuario solicita optimizar CONTROL para que no haya scroll de pagina
+vertical u horizontal en los viewports moviles normales, normalizar las
+etiquetas visibles de movimientos sin guiones bajos y evaluar acceso directo
+sin pedir al usuario una API key, sin incrustar claves permanentes en GitHub.
+Priorizar accesibilidad y pruebas reales; esos cambios complementan 4.2.
