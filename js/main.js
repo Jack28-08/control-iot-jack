@@ -1,34 +1,50 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
 import {ApiClient} from './api.js';
 import {VehicleSocket} from './socket.js';
-import {ControlSession} from './control.js';
+import {ControlSession} from './control.js?v=2';
 import {DIRECTIONS,validCommands,commandByName} from './catalog.js';
-import {initJoystick} from './joystick.js';
-import {initNavigation} from './navigation.js';
+import {isDiagonal} from './directions.js';
+import {initJoystick} from './joystick.js?v=2';
+import {initNavigation} from './navigation.js?v=2';
 import {MonitorSession} from './monitor.js';
-import * as ui from './ui.js';
+import * as ui from './ui.js?v=2';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
 const monitor=new MonitorSession(api,ui.renderMonitor);
 let renewalTimer=null;
-let joystick, demos=[], steps=[], catalogBusy=false, catalogLoaded=false, selectionVersion=0;
+let joystick, demos=[], catalogBusy=false, catalogLoaded=false, selectionVersion=0;
 let apiAvailable=null, healthBusy=false, rdsBusy=false;
+let gestureRequested=false, manualActive=false, awaitingConnection=false, inputPreviewOnly=false;
+let preserveCapture=false;
+const directionLabels={up:'Avanzar',right:'Girar a la derecha',down:'Retroceder',left:'Girar a la izquierda',
+  'up-right':'Avanzar a la derecha','up-left':'Avanzar a la izquierda',
+  'down-right':'Retroceder a la derecha','down-left':'Retroceder a la izquierda'};
 const control=new ControlSession(api,{
   change:refreshControls,operation:ui.setOperation,movement:ui.displayMovement,
-  step:ui.markDemoStep,neutral:()=>joystick?.neutral(),
+  canDispatch:canDrive,
+  step:ui.markDemoStep,neutral:({preservePreview=false}={})=>{
+    manualActive=false;gestureRequested=false;
+    if(preservePreview&&(inputPreviewOnly||preserveCapture))return;
+    preserveCapture=false;joystick?.neutral();
+  },
   confirmed:result=>monitor.confirmIndividual(result),
 });
 const state=control.state;
 ui.initUi();
 const navigation=initNavigation(view=>{
-  if(view==='monitor'){joystick?.neutral({notify:true});void monitor.enter();}
+  joystick?.neutral({notify:true});
+  if(view==='demo'&&manualActive)stopManual();
+  if(view==='monitor')void monitor.enter();
   else monitor.leave();
 });
 $('#monitorRefresh')?.addEventListener('click',()=>void monitor.refresh());
 
 function accessChanged(){
   ui.setAccessLabel(api.hasKey,api.evaluationStatus);
+  if(!api.hasAccess&&manualActive){
+    manualActive=false;gestureRequested=false;control.interruptManual();
+  }
   refreshControls();
   clearTimeout(renewalTimer);renewalTimer=null;
   const remaining=api.evaluationRemaining;
@@ -41,14 +57,16 @@ function accessChanged(){
     },delay);
   }
 }
+function canDrive(){
+  return api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
+}
 function refreshControls(){
-  const canMove=api.hasAccess&&control.canMove();
-  ui.lockCommands(!canMove);
+  ui.lockCommands(!canDrive());
   ui.markCommandState(state.lastRequested,state.movementPhase,state.pending);
-  $('#joystick').setAttribute('aria-disabled',String(!canMove));
-  ui.setDemoButtons({canStart:api.hasAccess&&control.canStart(),
+  ui.setDemoButtons({canStart:canDrive()&&control.canStart(),
     canCancel:api.hasAccess&&(state.demoActive||state.uncertain)&&!state.demoBusy&&!state.stopBusy&&Boolean(state.activeDemoId),
     selectionDisabled:state.demoBusy||state.demoActive||state.uncertain||state.stopBusy});
+  ui.setDemoState(state.uncertain&&(state.demoActive||state.demoBusy)?'Observación incierta':state.demoStatus);
 }
 function authorized(){
   if(api.hasAccess)return true;
@@ -57,6 +75,19 @@ function authorized(){
   ui.notify(message);return false;
 }
 function opError(prefix,error){ui.setOperation(`${prefix} · sin confirmación`,error.message);ui.notify(error.message);}
+function stopManual({preserveInput=false}={}){
+  manualActive=false;gestureRequested=false;
+  preserveCapture=preserveInput;
+  if(!preserveInput)joystick?.neutral();
+  if(api.hasAccess)void control.stop({preserveInput});
+  else control.interruptManual();
+}
+function onConnectionLost(){
+  if(!manualActive)return;
+  awaitingConnection=true;
+  joystick?.neutral();
+  stopManual();
+}
 async function selectDemo(){
   if(state.demoActive||state.demoBusy||state.stopBusy||state.uncertain)return;
   const demo=demos.find(d=>String(d.id_demo)===$('#demoSelect').value);
@@ -64,16 +95,15 @@ async function selectDemo(){
 }
 async function loadDemoPlan(id){
   const version=++selectionVersion;
-  state.selectedDemo=id;state.stepsReady=false;steps=[];
+  state.selectedDemo=id;state.stepsReady=false;
   ui.renderDemoSteps([]);refreshControls();
   if(!id)return;
   try{
     const result=await api.demoSteps(id);
     if(version!==selectionVersion)return;
     if(!Array.isArray(result))throw Error('El servidor no devolvió una lista de pasos.');
-    steps=result;
-    state.stepsReady=steps.length>0;
-    ui.renderDemoSteps(steps);
+    state.stepsReady=result.length>0;
+    ui.renderDemoSteps(result);
     if(state.demoActive&&state.activeDemoId===id)ui.markDemoStep(state.lastOrder);
     refreshControls();
   }catch(error){if(version===selectionVersion)opError('Secuencia',error);}
@@ -81,8 +111,12 @@ async function loadDemoPlan(id){
 const socket=new VehicleSocket(value=>{
   ui.setIndicator('ws',value,value==='En línea'?'ok':value==='Desconectado'?'error':'wait');
   monitor.connection(value);
-  if(value==='En línea')control.connected();
-  else if(value==='Desconectado')control.disconnected();
+  if(value==='En línea'){
+    awaitingConnection=false;
+    control.connected();refreshControls();
+  }else if(value==='Desconectado'){
+    control.disconnected();onConnectionLost();refreshControls();
+  }
 },event=>{
   control.event(event);
   monitor.event(event);
@@ -136,13 +170,24 @@ async function loadCatalog(){
       state.commands=[];
       ui.notify('No pudimos verificar los movimientos. Puedes intentar actualizar la conexión.');
     }
-    ui.renderCommands(state.commands,cmd=>{if(control.canMove()&&authorized())void control.move(cmd);});
+    ui.renderCommands(state.commands,cmd=>{
+      if(!canDrive())return;
+      if(Object.values(DIRECTIONS).some(direction=>commandByName(state.commands,direction)===cmd)){
+        manualActive=true;preserveCapture=false;
+      }
+      void control.move(cmd);
+    });
     if(d.status==='fulfilled'){
       demos=Array.isArray(d.value)?d.value.filter(x=>x?.activo===true&&x.id_vehiculo===VEHICLE_ID&&Number.isInteger(x.id_demo)):[];
     }else{demos=[];catalogLoaded=false;}
     if(!state.demoActive&&!state.demoBusy&&!state.uncertain){
-      ++selectionVersion;state.selectedDemo=null;state.stepsReady=false;steps=[];
-      ui.renderDemos(demos,{verified:d.status==='fulfilled'});ui.renderDemoSteps([]);
+      const selected=state.selectedDemo;
+      ui.renderDemos(demos,{verified:d.status==='fulfilled'});
+      if(demos.some(demo=>demo.id_demo===selected))$('#demoSelect').value=String(selected);
+      else{
+        ++selectionVersion;state.selectedDemo=null;state.stepsReady=false;
+        ui.renderDemoSteps([]);
+      }
     }
   }finally{catalogBusy=false;refreshControls();}
 }
@@ -152,7 +197,11 @@ async function retry(){
   await Promise.all([checkHealth(),checkRds()]);if(apiAvailable===true)await loadCatalog();
 }
 
-$('#credentialsButton').addEventListener('click',ui.showAuth);
+$('#credentialsButton').addEventListener('click',()=>{
+  joystick?.neutral({notify:true});
+  if(manualActive)stopManual();
+  ui.showAuth();refreshControls();
+});
 $('#saveKeyButton').addEventListener('click',()=>{
   api.setKey($('#keyInput').value);$('#keyInput').value='';$('#authDialog').close();
   ui.setOperation('Acceso actualizado',api.hasKey?'Clave sólo en memoria de esta página.':'No se ingresó ninguna clave.');
@@ -161,32 +210,66 @@ $('#clearKeyButton').addEventListener('click',()=>{
   api.clearKey();$('#keyInput').value='';$('#authDialog').close();
   ui.setOperation('Acceso borrado','La clave se eliminó de la memoria de esta página.');
 });
-$('#authDialog').addEventListener('close',()=>{$('#keyInput').value='';});
+$('#authDialog').addEventListener('close',()=>{$('#keyInput').value='';refreshControls();});
 $('#keyInput').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('#saveKeyButton').click();}});
-$('#stopButton').addEventListener('click',()=>{if(authorized())void control.stop();});
+for(const button of ['#stopButton','#stopDemoButton']){
+  $(button).addEventListener('click',()=>{if(authorized())stopManual();});
+}
 $('#demoSelect').addEventListener('change',()=>void selectDemo());
-$('#startDemoButton').addEventListener('click',()=>{if(control.canStart()&&authorized())void control.start();});
+$('#startDemoButton').addEventListener('click',()=>{if(canDrive()&&control.canStart())void control.start();});
 $('#cancelDemoButton').addEventListener('click',()=>{if(authorized())void control.cancel();});
 $('#retryConnectionButton').addEventListener('click',()=>void retry());
 joystick=initJoystick(direction=>{
+  if(isDiagonal(direction)){
+    if(gestureRequested||manualActive)stopManual({preserveInput:true});
+    return;
+  }
   const command=commandByName(state.commands,DIRECTIONS[direction]);
-  if(!command){ui.notify('Esta dirección no está disponible en el catálogo del vehículo.');return false;}
-  if(!authorized())return false;
+  if(!command){
+    if(manualActive)stopManual();
+    ui.notify('Esta dirección no está disponible en el catálogo del vehículo.');
+    return false;
+  }
+  gestureRequested=true;manualActive=true;preserveCapture=false;
   void control.move(command);
-},()=>{if(authorized())void control.stop();},{isEnabled:()=>api.hasAccess&&control.canMove()});
+},({held})=>{
+  if(gestureRequested)stopManual({preserveInput:held});
+  else if(!held)preserveCapture=false;
+},{
+  isEnabled:canDrive,
+  isPreviewEnabled:()=>navigation.view==='control'&&!$('#authDialog').open,
+  diagonalButtons:document.querySelectorAll('[data-preview-direction]'),
+  onPreview(direction,{previewOnly}){
+    inputPreviewOnly=Boolean(direction)&&previewOnly;
+    if(direction&&!previewOnly)preserveCapture=false;
+    $('#directionStatus').textContent=directionLabels[direction]||'Neutral';
+    $('.control-panel').dataset.preview=String(inputPreviewOnly);
+    for(const button of document.querySelectorAll('[data-preview-direction]')){
+      button.dataset.current=String(button.dataset.previewDirection===direction);
+    }
+  },
+});
 document.addEventListener('keydown',event=>{
-  if(event.key==='Escape'&&!event.defaultPrevented&&!$('#authDialog').open&&api.hasAccess){
-    event.preventDefault();void control.stop();
+  if(event.key==='Escape'&&!event.defaultPrevented&&!event.repeat){
+    if($('#authDialog').open)$('#authDialog').close();
+    else if(api.hasAccess){event.preventDefault();stopManual();}
   }
 });
 
+ui.setAccessLabel(api.hasKey,api.evaluationStatus);
 refreshControls();socket.start();void api.evaluation();
 void checkHealth();void checkRds();
 setInterval(()=>void checkHealth(),API_CHECK_MS);
 setInterval(()=>void checkRds(),RDS_CHECK_MS);
-window.addEventListener('offline',()=>ui.setIndicator('db','Sin verificar','wait'));
+window.addEventListener('offline',()=>{
+  ui.setIndicator('db','Sin verificar','wait');
+  onConnectionLost();refreshControls();
+});
 window.addEventListener('online',()=>void retry());
-window.addEventListener('pagehide',()=>{monitor.close();api.clearKey();api.clearEvaluation();$('#keyInput').value='';socket.close();});
+window.addEventListener('pagehide',()=>{
+  if(manualActive)onConnectionLost();
+  monitor.close();api.clearKey();api.clearEvaluation();$('#keyInput').value='';socket.close();
+});
 window.addEventListener('pageshow',event=>{if(event.persisted){
   if(navigation.view==='monitor')void monitor.enter();
   socket.start();void retry();

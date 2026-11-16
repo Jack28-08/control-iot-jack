@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#091522" />
+  <meta name="theme-color" content="#080d16" />
   <meta name="description" content="NODE/01: control y monitoreo del vehículo IoT, con joystick, secuencias y registros de movimientos." />
   <title>NODE/01 — Control y monitoreo IoT</title>
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous" />
-  <link rel="stylesheet" href="./css/styles.css?v=4.2" />
-  <script type="module" src="./js/main.js"></script>
+  <link rel="stylesheet" href="./css/styles.css?v=2" />
+  <script type="module" src="./js/main.js?v=2"></script>
 </head>
 <body>
   <div class="page-wrap">
@@ -34,16 +34,6 @@
           </button>
         </div>
       </div>
-      <nav class="view-nav" aria-label="Módulos del vehículo">
-        <div class="view-tabs" role="tablist" aria-label="Vistas">
-          <button id="showControl" class="view-tab" type="button" role="tab" aria-controls="controlView" aria-selected="true">
-            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12H4m2-2v4m10-2h.1m3-2h.1M7 7h10a4 4 0 0 1 4 3l1 4a3 3 0 0 1-5 3l-2-2H9l-2 2a3 3 0 0 1-5-3l1-4a4 4 0 0 1 4-3Z"/></svg> Control
-          </button>
-          <button id="showMonitor" class="view-tab" type="button" role="tab" aria-controls="monitorView" aria-selected="false" tabindex="-1">
-            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17V7h18v10H3Zm4-5h3l2-3 2 6 2-3h2"/></svg> Monitoreo
-          </button>
-        </div>
-      </nav>
     </header>
 
     <section aria-label="Estados de conectividad" class="status-grid">
@@ -73,38 +63,35 @@
         <section class="panel control-panel" aria-labelledby="joystickTitle">
           <div class="panel-head">
             <h2 id="joystickTitle">Joystick</h2>
-            <div class="movement-badge"><span class="movement-dot" aria-hidden="true"></span><strong id="movementDisplay" role="status" aria-live="polite">Neutral</strong></div>
+            <div class="movement-badge"><span class="movement-dot" aria-hidden="true"></span><strong id="directionStatus" role="status" aria-live="polite">Neutral</strong></div>
           </div>
           <div class="control-stage">
-            <div class="joystick-boundary" id="joystick" role="group" tabindex="0" aria-disabled="true" aria-label="Joystick virtual" aria-describedby="joystickHelp">
+            <div class="joystick-boundary" id="joystick" role="group" tabindex="0" aria-label="Joystick de ocho direcciones" aria-describedby="joystickHelp diagonalNote">
               <div class="joystick-bezel" aria-hidden="true">
-                <span class="axis top">↑</span><span class="axis bottom">↓</span><span class="axis left">←</span><span class="axis right">→</span>
+                <span class="axis top" data-axis="up">↑</span><span class="axis bottom" data-axis="down">↓</span><span class="axis left" data-axis="left">←</span><span class="axis right" data-axis="right">→</span>
                 <div class="joystick-cross"></div><div class="joystick-stick" id="joystickStick"><span class="joystick-led"></span></div>
               </div>
             </div>
+            <div class="diagonal-pad" role="group" aria-label="Vista previa de diagonales" aria-describedby="diagonalNote">
+              <button type="button" data-direction="up-left" data-preview-direction="up-left" aria-label="Avanzar a la izquierda, vista previa"><span aria-hidden="true">↖</span></button>
+              <button type="button" data-direction="up-right" data-preview-direction="up-right" aria-label="Avanzar a la derecha, vista previa"><span aria-hidden="true">↗</span></button>
+              <button type="button" data-direction="down-left" data-preview-direction="down-left" aria-label="Retroceder a la izquierda, vista previa"><span aria-hidden="true">↙</span></button>
+              <button type="button" data-direction="down-right" data-preview-direction="down-right" aria-label="Retroceder a la derecha, vista previa"><span aria-hidden="true">↘</span></button>
+            </div>
           </div>
-          <p id="joystickHelp" class="visually-hidden">Arrastra o usa las flechas. Al soltar, perder foco o pulsar Escape se solicita detener.</p>
+          <p id="diagonalNote" class="diagonal-note">Diagonales · solo vista previa</p>
+          <p id="joystickHelp" class="visually-hidden">Arrastra o combina dos flechas compatibles. Si se solicitó un movimiento, soltar el joystick, perder el foco o pulsar Escape solicita detener.</p>
           <button id="stopButton" class="stop-button" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" /></svg><span>DETENER</span></button>
         </section>
 
         <section class="panel actions-panel" aria-label="Acciones del vehículo">
-          <div class="action-tabs" role="tablist" aria-label="Tipo de control">
-            <button id="showCommands" class="action-tab" type="button" role="tab" aria-controls="commandPanel" aria-selected="true">Movimientos</button>
-            <button id="showDemos" class="action-tab" type="button" role="tab" aria-controls="demoPanel" aria-selected="false" tabindex="-1">Secuencias <span aria-hidden="true">▸</span></button>
-            <span id="commandsCount" class="visually-hidden">0 comandos</span>
+          <div class="panel-head commands-head">
+            <h2 id="commandsTitle">Mandos</h2>
+            <span id="commandsCount" class="visually-hidden">0 movimientos</span>
+            <span id="controlAvailability" class="panel-counter" role="status">Comprobando acceso</span>
           </div>
-          <div id="commandPanel" class="action-content" role="tabpanel" aria-labelledby="showCommands">
+          <div id="commandPanel" class="action-content" aria-labelledby="commandsTitle">
             <div class="control-buttons" id="commandButtons" aria-live="polite"><p class="empty-state">Cargando movimientos…</p></div>
-          </div>
-          <div id="demoPanel" class="action-content demo-panel" role="tabpanel" aria-labelledby="showDemos" hidden>
-            <label class="visually-hidden" for="demoSelect">Seleccionar secuencia</label>
-            <select class="form-select custom-select" id="demoSelect"><option value="">Cargando secuencias…</option></select>
-            <div class="demo-info"><strong id="demoCount">Sin pasos</strong><small id="demoDuration">Duración pendiente</small></div>
-            <div class="demo-steps" id="demoSteps" tabindex="0" aria-label="Pasos de la secuencia"><p class="empty-state">Elige una secuencia para consultar sus pasos.</p></div>
-            <div class="demo-actions">
-              <button class="action-primary" id="startDemoButton" type="button" disabled><span aria-hidden="true">▶</span> Iniciar demo</button>
-              <button class="action-secondary" id="cancelDemoButton" type="button" disabled><span aria-hidden="true">×</span> Cancelar</button>
-            </div>
           </div>
         </section>
       </section>
@@ -151,24 +138,60 @@
           </div>
         </section>
       </section>
+
+      <section id="demoPanel" class="view-panel demo-workspace" role="tabpanel" aria-labelledby="showDemos" hidden>
+        <section class="panel demo-console" aria-labelledby="demoTitle">
+          <div class="panel-head">
+            <h2 id="demoTitle">Secuencias</h2>
+            <span id="demoState" class="panel-counter" role="status" aria-live="polite">En espera</span>
+          </div>
+          <label class="visually-hidden" for="demoSelect">Seleccionar secuencia</label>
+          <select class="form-select custom-select" id="demoSelect"><option value="">Cargando secuencias…</option></select>
+          <div class="demo-info"><strong id="demoCount">Sin pasos</strong><span id="demoDuration">Duración pendiente</span></div>
+          <div class="demo-progress" id="demoProgress" role="progressbar" aria-label="Último paso observado" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" hidden><span></span></div>
+          <div class="demo-actions">
+            <button class="action-primary" id="startDemoButton" type="button" disabled><span aria-hidden="true">▶</span> Iniciar demo</button>
+            <button class="action-secondary" id="cancelDemoButton" type="button" disabled>Cancelar</button>
+          </div>
+          <button id="stopDemoButton" class="stop-button" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" /></svg><span>DETENER</span></button>
+        </section>
+        <section class="panel demo-timeline" aria-labelledby="timelineTitle">
+          <div class="panel-head"><h2 id="timelineTitle">Pasos de la secuencia</h2></div>
+          <div class="demo-steps" id="demoSteps" tabindex="0" aria-label="Pasos de la secuencia"><p class="empty-state">Elige una secuencia para consultar sus pasos.</p></div>
+        </section>
+      </section>
     </main>
 
     <section class="feedback-panel" aria-label="Estado de la operación">
       <span class="feedback-pulse" aria-hidden="true"></span>
       <div class="feedback-status">
         <strong id="operationState" role="status" aria-live="polite">Sin órdenes en esta sesión</strong>
-        <span id="operationTime" class="feedback-time"></span>
+        <span id="movementDisplay" class="feedback-movement">Neutral</span>
       </div>
       <p id="notice" class="notice" role="alert" hidden></p>
       <details class="feedback-disclosure">
         <summary class="btn-ghost" aria-label="Detalles de la operación" title="Detalles de la operación">Detalles</summary>
         <div class="feedback-detail">
+          <span id="operationTime" class="feedback-time"></span>
           <p id="operationDetail">La interfaz muestra órdenes y eventos del servidor; no certifica que el vehículo se haya movido.</p>
           <p id="noticeDetail" hidden></p>
         </div>
       </details>
     </section>
-    <footer class="site-footer"><span class="footer-project">NODE/01 <span aria-hidden="true">/</span> Práctica 4.2</span><span>Desarrollado por José Héctor Rosales Cabrera · 2026</span></footer>
+    <nav class="view-nav" aria-label="Módulos del vehículo">
+      <div class="view-tabs" role="tablist" aria-label="Vistas">
+        <button id="showControl" class="view-tab" type="button" role="tab" aria-controls="controlView" aria-selected="true">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12H4m2-2v4m10-2h.1m3-2h.1M7 7h10a4 4 0 0 1 4 3l1 4a3 3 0 0 1-5 3l-2-2H9l-2 2a3 3 0 0 1-5-3l1-4a4 4 0 0 1 4-3Z"/></svg><span>Control</span>
+        </button>
+        <button id="showMonitor" class="view-tab" type="button" role="tab" aria-controls="monitorView" aria-selected="false" tabindex="-1">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M5 12h4l2-4 3 8 2-4h3"/></svg><span>Monitoreo</span>
+        </button>
+        <button id="showDemos" class="view-tab" type="button" role="tab" aria-controls="demoPanel" aria-selected="false" tabindex="-1">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></svg><span>Demo</span>
+        </button>
+      </div>
+    </nav>
+    <footer class="site-footer"><span>Desarrollado por José Héctor Rosales Cabrera · 2026</span></footer>
   </div>
 
   <dialog class="access-dialog" id="authDialog" aria-labelledby="authTitle">

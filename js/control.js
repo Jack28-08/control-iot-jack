@@ -2,10 +2,10 @@
 export class ControlSession {
   constructor(api, view={}) {
     this.api=api;
-    this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},...view};
+    this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},canDispatch:()=>true,...view};
     this.state={commands:[],selectedDemo:null,stepsReady:false,demoActive:false,demoBusy:false,
       movementBusy:false,stopBusy:false,pending:null,lastRequested:null,activeDemoId:null,
-      execution:null,lastOrder:0,uncertain:false,movementPhase:'idle'};
+      execution:null,lastOrder:0,uncertain:false,movementPhase:'idle',demoStatus:'En espera'};
     this.epoch=0;this.demoRevision=0;this.finished=new Set();this.activeController=null;this.observing=false;this.observationRevision=0;
   }
   changed(){this.view.change(this.state);}
@@ -37,13 +37,15 @@ export class ControlSession {
       if(this.activeController===controller)this.activeController=null;
       s.movementBusy=false;
       const next=s.pending;s.pending=null;this.changed();
-      if(next&&epoch===this.epoch&&this.canMove())void this.move(next);
+      if(next&&epoch===this.epoch&&this.canMove()&&this.view.canDispatch())void this.move(next);
     }
   }
-  async stop(){
+  async stop({preserveInput=false}={}){
     const s=this.state;if(s.stopBusy)return;
     const epoch=++this.epoch;
-    s.stopBusy=true;s.pending=null;s.movementPhase='idle';this.view.neutral();this.activeController?.abort('priority_stop');this.changed();
+    s.stopBusy=true;s.pending=null;s.movementPhase='idle';
+    if(!preserveInput)this.view.neutral();
+    this.activeController?.abort('priority_stop');this.changed();
     this.view.movement('DETENIENDO');
     this.view.operation('DETENER · solicitado','Prioridad local. Abortar un fetch no revierte una orden ya recibida por AWS.');
     try{
@@ -51,6 +53,7 @@ export class ControlSession {
       if(epoch!==this.epoch)return;
       if(result?.detencion_logica!==true)throw Error('La respuesta no confirma detención lógica.');
       this.demoRevision++;s.demoActive=false;s.uncertain=false;s.activeDemoId=null;
+      s.demoStatus='Detenida';
       if(s.execution)this.finished.add(s.execution);
       s.execution=null;s.lastOrder=0;this.view.step(-1);this.view.movement('NEUTRAL');
       this.view.operation('DETENER · aceptado por API','Detención lógica confirmada. Una solicitud previa ya procesada no puede deshacerse desde el navegador. No certifica motores.');
@@ -60,7 +63,7 @@ export class ControlSession {
   async start(){
     if(!this.canStart())return;
     const s=this.state, id=s.selectedDemo, epoch=this.epoch, revision=this.demoRevision,observation=this.observationRevision;
-    s.demoBusy=true;s.activeDemoId=id;s.lastOrder=0;this.view.neutral();this.changed();
+    s.demoBusy=true;s.activeDemoId=id;s.lastOrder=0;s.demoStatus='Iniciando';this.view.neutral();this.changed();
     this.view.operation('DEMO · inicio solicitado','Esperando HTTP 202; la secuencia se ejecuta en AWS.');
     try{
       const result=await this.api.startDemo(id);
@@ -68,24 +71,26 @@ export class ControlSession {
       if(result?.id_demo!==id||typeof result.id_ejecucion!=='string')throw Error('Respuesta DEMO inesperada.');
       if(revision!==this.demoRevision||this.finished.has(result.id_ejecucion))return;
       s.execution=result.id_ejecucion;s.demoActive=true;s.uncertain=!this.observing||observation!==this.observationRevision;
+      s.demoStatus=s.lastOrder>0?'En curso':'Inicio aceptado';
       this.view.operation('DEMO · aceptada por API con HTTP 202','Los eventos WSS permiten observar el orden; no prueban movimiento físico.');
     }catch(error){
-      if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;this.fail('DEMO',error);}
+      if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;s.demoStatus='Inicio sin confirmar';this.fail('DEMO',error);}
     }finally{s.demoBusy=false;this.changed();}
   }
   async cancel(){
     const s=this.state;
     if((!s.demoActive&&!s.uncertain)||s.demoBusy||s.stopBusy||!s.activeDemoId)return;
     const id=s.activeDemoId,epoch=this.epoch,revision=this.demoRevision;
-    s.demoBusy=true;this.changed();
+    s.demoBusy=true;s.demoStatus='Cancelando';this.changed();
     try{
       const result=await this.api.cancelDemo(id);
       if(epoch!==this.epoch||revision!==this.demoRevision)return;
       if(result?.id_demo!==id||!['cancelada','finalizada','error'].includes(result.estado))throw Error('Cancelación sin estado concluyente.');
       this.demoRevision++;s.demoActive=false;s.uncertain=false;s.lastOrder=0;this.view.step(-1);this.view.movement('NEUTRAL');
+      s.demoStatus={cancelada:'Cancelada',finalizada:'Finalizada',error:'Error'}[result.estado];
       if(s.execution)this.finished.add(s.execution);
       this.view.operation('DEMO · respuesta de cancelación',`Estado del servidor: ${result.estado}. Verifica también el evento WSS externo.`);
-    }catch(error){if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;this.fail('CANCELAR DEMO',error);}}
+    }catch(error){if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;s.demoStatus='Cancelación sin confirmar';this.fail('CANCELAR DEMO',error);}}
     finally{s.demoBusy=false;this.changed();}
   }
   event(event){
@@ -113,10 +118,12 @@ export class ControlSession {
           s.lastOrder=event.orden;this.view.step(event.orden);
         }else if(!newExecution&&s.lastOrder>0)return;
         s.demoActive=true;s.uncertain=false;s.pending=null;this.view.neutral();
+        s.demoStatus='En curso';
         this.view.movement(type==='demo_inicio'?'DEMO EN CURSO':event.comando||'DEMO');
         this.view.operation(type==='demo_inicio'?'DEMO · evento de inicio':`DEMO · paso ${event.orden}`,'Evento recibido de AWS. La recepción parcial no certifica toda la secuencia ni motores físicos.');
       }else{
         this.finished.add(event.id_ejecucion);this.demoRevision++;s.demoActive=false;s.uncertain=false;
+        s.demoStatus={demo_fin:'Finalizada',demo_cancelada:'Cancelada',demo_error:'Error'}[type];
         s.execution=null;s.lastOrder=0;this.view.step(-1);this.view.movement(type==='demo_error'?'SIN CONFIRMAR':'NEUTRAL');
         this.view.operation(`Evento WSS · ${type}`,'AWS notificó el cierre de esta ejecución. No certifica actuación física.');
       }
@@ -124,7 +131,8 @@ export class ControlSession {
       this.epoch++;this.demoRevision++;s.pending=null;s.movementPhase='idle';this.activeController?.abort('remote_stop');
       if(s.execution)this.finished.add(s.execution);
       if(event.id_ejecucion)this.finished.add(event.id_ejecucion);
-      s.execution=null;s.demoActive=false;s.uncertain=false;this.view.neutral();this.view.step(-1);this.view.movement('NEUTRAL');
+      s.execution=null;s.demoActive=false;s.uncertain=false;this.view.neutral({preservePreview:true});this.view.step(-1);this.view.movement('NEUTRAL');
+      s.demoStatus='Detenida';
       this.view.operation('Evento WSS · detencion_logica','Detención lógica publicada por AWS; no confirma motores físicos.');
     }
     this.changed();
@@ -133,6 +141,16 @@ export class ControlSession {
     this.observing=false;this.observationRevision++;const s=this.state;
     if(s.demoActive||s.demoBusy){s.uncertain=true;this.changed();
       this.view.operation('DEMO · observación interrumpida','El estado inicial de WSS no informa si la DEMO sigue activa. Usa Cancelar o DETENER para recuperar un estado confirmado.');}
+  }
+  interruptManual(){
+    this.epoch++;
+    this.state.pending=null;
+    this.state.uncertain=true;
+    this.state.movementPhase='error';
+    this.activeController?.abort('connection_lost');
+    this.view.neutral();
+    this.view.operation('Movimiento sin confirmar','Recupera el acceso y solicita DETENER para confirmar la detención lógica.');
+    this.changed();
   }
   connected(){this.observing=true;}
 }

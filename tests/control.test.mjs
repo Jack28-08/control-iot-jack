@@ -46,6 +46,45 @@ test('STOP sale inmediatamente, aborta movimiento y descarta dirección pendient
   assert.equal(h.operations.at(-1)[0],lastOperation);
 });
 
+test('DETENER durante la transición de sector permite mantener la captura local',async()=>{
+  const h=setup();
+  const neutral=[];
+  h.session.view.neutral=options=>neutral.push(options);
+  const running=h.session.move(h.commands[0]);
+  const stopping=h.session.stop({preserveInput:true});
+  assert.deepEqual(neutral,[]);
+  assert.equal(h.calls.move[0].args[1].aborted,true);
+  h.session.event(event('detencion_logica'));
+  assert.deepEqual(neutral,[{preservePreview:true}]);
+  h.calls.stop[0].resolve({detencion_logica:true});await stopping;
+  h.calls.move[0].resolve({id_comando:42});await running;
+  assert.equal(h.calls.move.length,1);
+  assert.equal(h.movements.at(-1),'NEUTRAL');
+});
+
+test('revocar el despacho evita reactivar el control con una dirección pendiente',async()=>{
+  const h=setup();
+  const running=h.session.move(h.commands[0]);
+  await h.session.move(h.commands[1]);
+  h.session.view.canDispatch=()=>false;
+  h.calls.move[0].resolve({id_comando:42});await running;
+  assert.equal(h.calls.move.length,1);
+  assert.equal(h.session.state.pending,null);
+});
+
+test('perder acceso invalida el movimiento pendiente y requiere confirmar detención',async()=>{
+  const h=setup();
+  const running=h.session.move(h.commands[0]);
+  await h.session.move(h.commands[1]);
+  h.session.interruptManual();
+  assert.equal(h.calls.move[0].args[1].aborted,true);
+  assert.equal(h.session.canMove(),false);
+  h.calls.move[0].resolve({id_comando:42});await running;
+  assert.equal(h.calls.move.length,1);
+  assert.equal(h.calls.stop.length,0);
+  assert.match(h.operations.at(-1)[0],/sin confirmar/);
+});
+
 test('sólo se envía la última dirección pendiente, sin duplicados mientras hay petición',async()=>{
   const h=setup();const running=h.session.move(h.commands[0]);
   await h.session.move(h.commands[1]);await h.session.move(h.commands[2]);await h.session.move(h.commands[2]);

@@ -14,19 +14,6 @@ let demoOrder=null;
 export function initUi(){
   if(initialized)return;
   initialized=true;
-  const tabs=[$('#showCommands'),$('#showDemos')],panels=[$('#commandPanel'),$('#demoPanel')];
-  const activate=(index,focus=false)=>{
-    tabs.forEach((tab,i)=>{tab.setAttribute('aria-selected',String(index===i));tab.tabIndex=index===i?0:-1;panels[i].hidden=index!==i;});
-    if(focus)tabs[index].focus({preventScroll:true});
-  };
-  tabs.forEach((tab,i)=>{
-    tab.addEventListener('click',()=>activate(i));
-    tab.addEventListener('keydown',event=>{
-      const index={ArrowLeft:1-i,ArrowRight:1-i,Home:0,End:1}[event.key];
-      if(index===undefined)return;
-      event.preventDefault();activate(index,true);
-    });
-  });
   $('#historyPrevious').addEventListener('click',()=>{historyPage--;paintHistory();});
   $('#historyNext').addEventListener('click',()=>{historyPage++;paintHistory();});
   window.addEventListener('resize',paintHistory,{passive:true});
@@ -60,6 +47,11 @@ export function setAccessLabel(enabled,evaluationStatus='idle'){
   button.hidden=active;
   button.querySelector('span').textContent=enabled?'Clave activa':'Acceso';
   access.hidden=!active;
+  const unavailable=!active&&!enabled;
+  document.querySelector('.actions-panel').dataset.authorized=String(!unavailable);
+  const message=evaluationStatus==='checking'?'Comprobando acceso':'Requiere acceso autorizado';
+  $('#controlAvailability').textContent=unavailable?message:'';
+  $('#controlAvailability').hidden=!unavailable;
   if(active){
     access.textContent='Evaluación activa';
     if($('#authDialog').open)$('#authDialog').close();
@@ -119,6 +111,10 @@ export function renderDemoSteps(steps=[]){
   $('#demoCount').textContent=steps.length?`${steps.length} ${steps.length===1?'paso':'pasos'}`:'Sin pasos';
   const ms=steps.reduce((sum,x)=>sum+Math.max(0,Number(x.duracion_ms)||0)+Math.max(0,Number(x.pausa_ms)||0),0);
   $('#demoDuration').textContent=steps.length?`${formatDuration(ms)} aprox.`:'Duración pendiente';
+  const progress=$('#demoProgress');
+  progress.hidden=!steps.length;
+  progress.setAttribute('aria-valuemax',String(Math.max(1,steps.length)));
+  updateDemoProgress(0);
   if(!steps.length){target.append(node('p','Elige una secuencia para consultar sus pasos.','empty-state'));return;}
   for(const step of [...steps].sort((a,b)=>a.orden-b.orden)){
     const line=node('div',undefined,'demo-step');line.dataset.step=String(step.orden);
@@ -131,7 +127,9 @@ export function renderDemoSteps(steps=[]){
 export function markDemoStep(n){
   if(demoOrder===n)return;
   demoOrder=n;
-  for(const row of document.querySelectorAll('.demo-step')){
+  const rows=[...document.querySelectorAll('.demo-step')];
+  updateDemoProgress(rows.findIndex(row=>Number(row.dataset.step)===n)+1);
+  for(const row of rows){
     const current=Number(row.dataset.step)===Number(n);row.classList.toggle('is-current',current);
     if(current){
       row.setAttribute('aria-current','step');
@@ -143,6 +141,15 @@ export function markDemoStep(n){
     }else row.removeAttribute('aria-current');
   }
 }
+function updateDemoProgress(value){
+  const progress=$('#demoProgress');
+  progress.setAttribute('aria-valuenow',String(value));
+  progress.style.setProperty('--progress',String(value/Number(progress.getAttribute('aria-valuemax'))));
+}
+export function setDemoState(state){
+  const badge=$('#demoState');
+  if(badge.textContent!==state)badge.textContent=state;
+}
 export function setDemoButtons({canStart=false,canCancel=false,selectionDisabled=false}={}){
   $('#startDemoButton').disabled=!canStart;
   $('#cancelDemoButton').disabled=!canCancel;
@@ -153,7 +160,7 @@ export function displayVehicle(name){
   const title=formatName(name,'Vehículo sin verificar');
   $('#unitName').textContent=title;$('#unitName').title=title;
 }
-export function showAuth(){const d=$('#authDialog');if(!d.open)d.showModal();$('#keyInput').focus();}
+export function showAuth(){const d=$('#authDialog');if(!d.open)d.show();$('#keyInput').focus();}
 
 const historyLabels={
   idle:'Esperando consulta',
