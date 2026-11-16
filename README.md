@@ -1,18 +1,23 @@
 # NODE/01 Control y Monitoreo IoT
 
-La práctica 4.2 amplía el [CONTROL de 4.1](https://github.com/Jack28-08/control-iot-jack/tree/f23033d) con MONITOREO dentro de la misma aplicación. Usa HTML5, CSS3, Bootstrap 5, Fetch y WebSocket nativo. El vehículo es el **1** y los comandos se construyen con su catálogo real, conservando identificador y código.
+NODE/01 reúne Control, Monitoreo y Demo en una consola adaptable. Usa HTML5, CSS3, Bootstrap 5, Fetch y WebSocket nativo. El vehículo es el **1** y las órdenes individuales usan los identificadores de su catálogo real. La entrega original de la práctica queda en la etiqueta `practica-4.2-entrega`.
 
 - [NODE/01 en GitHub Pages](https://jack28-08.github.io/control-iot-jack/).
 - [Repositorio del frontend](https://github.com/Jack28-08/control-iot-jack).
 - [Swagger de la API existente](https://184-72-72-255.sslip.io/docs).
 - [Enunciado 4.2 y sus siete evidencias](./docs/ENUNCIADO_PRACTICA_4_2.txt).
 - [Protocolo para terminar las evidencias reales](./docs/VERIFICACION_4_2.md).
+- [Auditoría de firmware y contrato para diagonales](./docs/CONTROL_DIRECCIONAL.md).
 
 ## Uso
 
-**Control** conserva joystick con puntero, toque y flechas, ocho acciones según el catálogo, detención prioritaria y el panel de secuencias. Soltar el joystick, perder captura o pulsar Escape neutraliza el gesto y solicita detener cuando hay una maniobra activa. No se envía un POST por píxel.
+**Control** conserva los ocho mandos del catálogo y DETENER. El joystick muestra ocho sectores con zona neutral e histéresis. Usa el puntero o las flechas con el foco en el joystick. Dos flechas compatibles presionadas en los primeros 65 ms forman una diagonal. También puedes mantener pulsado cualquiera de los cuatro botones diagonales de vista previa. Al soltar una flecha del acorde, la flecha restante se muestra sin enviar una orden. Los opuestos entre sí neutralizan el gesto.
+
+Las cuatro diagonales son previsualizaciones. Las cuatro cardinales del joystick siguen usando el catálogo. Si entras a una diagonal desde un movimiento solicitado, el navegador cancela las órdenes pendientes y solicita DETENER. También solicita detener al soltar un gesto que envió una orden, perder foco o captura, o perder WSS durante una dirección activa. DETENER tiene prioridad local y lógica en el servidor. Un POST ya procesado puede haber surtido efecto y toda confirmación física depende del actuador.
 
 **Monitoreo** muestra el último estado reportado y los diez movimientos individuales persistidos más recientes. Las pantallas pequeñas paginan la presentación. Cambiar de pestaña no navega a otro documento ni abre otro WebSocket. El evento recibido informa del estado; solo REST alimenta la tabla. Ningún HTTP o WSS confirma movimiento físico.
+
+**Demo** separa el selector, el estado y las acciones de la lista de pasos consultados por REST. El avance marca el último paso recibido por WSS. Si se pierde observación durante la ejecución, la vista conserva el paso conocido e informa incertidumbre. Iniciar, Cancelar y DETENER siguen sujetos al mismo contrato existente.
 
 Durante una ventana abierta en EC2, el enlace público emite una sesión de evaluación y no pide una clave. Fuera de ese horario la lectura sigue pública; **Acceso** permite al operador autorizado usar su propia clave en memoria. No se abre automáticamente ningún diálogo.
 
@@ -21,7 +26,7 @@ Durante una ventana abierta en EC2, el enlace público emite una sesión de eval
 | Módulo | Responsabilidad |
 | --- | --- |
 | `js/api.js`, `js/config.js` | Rutas reales, cancelación, timeout, errores y credenciales solo en memoria. |
-| `js/control.js`, `js/joystick.js` | Coordinación de movimientos, prioridad de detención, secuencias, puntero y teclado. |
+| `js/control.js`, `js/joystick.js`, `js/directions.js` | Coordinación, prioridad de detención, ocho sectores, histéresis y arbitraje de puntero y teclado. |
 | `js/catalog.js`, `js/protocol.js`, `js/format.js` | Validación de catálogo y eventos; etiquetas, iconos y horas de presentación. |
 | `js/socket.js` | Único canal WSS por pestaña, validación y reconexión progresiva. |
 | `js/monitor.js`, `js/navigation.js`, `js/main.js`, `js/ui.js` | Sincronización, vistas, paginación y diagnóstico independiente. |
@@ -57,7 +62,9 @@ $env:BROWSER_EXE = 'C:\ruta\a\chrome.exe'
 npm.cmd run test:browser
 ```
 
-El runner navega la subruta de Pages, bloquea tráfico ajeno al servidor local y simula toda operación IoT. Si existe `.local/bootstrap-5.3.3.min.css`, usa esa copia local del CSS publicado. Escribe capturas y resultados bajo `.local/evidencia-4-2`. Los resultados locales no acreditan movimientos reales ni funcionamiento en un teléfono físico.
+El arnés navega la subruta de Pages y sustituye REST y WSS por dobles locales. Si existe `.local/bootstrap-5.3.3.min.css`, usa esa copia del CSS publicado. Escribe capturas y resultados bajo `evidencias/redisenio/simulacion`. Usa `NODE01_EVIDENCE_DIR` para elegir otro destino.
+
+Las pruebas verifican las tres vistas en diez tamaños, zoom al 200 %, teclado, puntero, toque con liberación parcial, acceso cerrado, DETENER bajo pérdida de conexión, historial y avance de DEMO por eventos. Las operaciones reales sobre el vehículo y la comprobación en teléfono físico requieren una sesión supervisada.
 
 ## Publicación y acceso de evaluación
 
@@ -65,8 +72,6 @@ Pages conserva `main` / raíz, HTTPS y rutas relativas. No se publican documento
 
 El frontend solo guarda el token corto en RAM y solo lo envía al servidor. Los GET ordinarios no llevan credenciales. El origen de Pages es una condición adicional, no autenticación por sí sola. La ventana tiene límites y no identifica personalmente al visitante. Úsala de forma supervisada; no muestres encabezados de autorización ni guardes un HAR autenticado.
 
-El 13 de noviembre de 2026 pasaron 71 pruebas unitarias del frontend y 14 escenarios en Chromium con REST y WSS simulados. El navegador verificó Control, Secuencias y Monitoreo en diez tamaños, el reflujo al ampliar y la actualización entre dos pestañas. En la rama de evaluación pasaron 179 pruebas locales del backend.
+El 13 de noviembre de 2026, en la práctica 4.2, Swagger, `/health`, `/health/db`, estado, historial, catálogo y pasos de la DEMO respondieron HTTP 200. El historial devolvió diez filas del vehículo 1 en orden descendente, sin IDs repetidos. Monitoreo y un cliente WSS independiente recibieron el estado inicial. El 16 de noviembre los intentos a `/health` agotaron el tiempo de conexión desde esta PC.
 
-En la primera consulta desde esta PC, la conexión a `/health` agotó el tiempo sin respuesta HTTP y RDS quedó «Sin verificar». En una comprobación posterior, `/health`, `/health/db`, Swagger, estado, historial, catálogo y pasos de la DEMO respondieron HTTP 200. El historial devolvió diez filas del vehículo 1 en orden descendente, sin IDs repetidos. Tanto Monitoreo publicado como un cliente WSS independiente recibieron el estado inicial.
-
-El acceso de evaluación sigue pendiente de despliegue en EC2. En la API pública, el GET de sesión respondió HTTP 404. El [recorrido de verificación](./docs/VERIFICACION_4_2.md) describe cómo completar las comprobaciones supervisadas de movimiento y DEMO, el historial tras nuevos registros y la prueba en un teléfono físico.
+El frontend conserva el contrato de sesión temporal y el acceso privado de operador. El último intento de salud no permitió revalidar la sesión en producción. El [recorrido de verificación](./docs/VERIFICACION_4_2.md) cubre movimiento y DEMO supervisados, historial tras nuevas escrituras y teléfono físico.

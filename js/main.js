@@ -82,6 +82,10 @@ function stopManual({preserveInput=false}={}){
   if(api.hasAccess)void control.stop({preserveInput});
   else control.interruptManual();
 }
+function requestStop(){
+  joystick?.neutral();
+  if(authorized())stopManual();
+}
 function onConnectionLost(){
   if(!manualActive)return;
   awaitingConnection=true;
@@ -213,7 +217,7 @@ $('#clearKeyButton').addEventListener('click',()=>{
 $('#authDialog').addEventListener('close',()=>{$('#keyInput').value='';refreshControls();});
 $('#keyInput').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('#saveKeyButton').click();}});
 for(const button of ['#stopButton','#stopDemoButton']){
-  $(button).addEventListener('click',()=>{if(authorized())stopManual();});
+  $(button).addEventListener('click',requestStop);
 }
 $('#demoSelect').addEventListener('change',()=>void selectDemo());
 $('#startDemoButton').addEventListener('click',()=>{if(canDrive()&&control.canStart())void control.start();});
@@ -242,7 +246,8 @@ joystick=initJoystick(direction=>{
   onPreview(direction,{previewOnly}){
     inputPreviewOnly=Boolean(direction)&&previewOnly;
     if(direction&&!previewOnly)preserveCapture=false;
-    $('#directionStatus').textContent=directionLabels[direction]||'Neutral';
+    const label=directionLabels[direction]||'Neutral';
+    $('#directionStatus').textContent=inputPreviewOnly?`${label} · Vista previa`:label;
     $('.control-panel').dataset.preview=String(inputPreviewOnly);
     for(const button of document.querySelectorAll('[data-preview-direction]')){
       button.dataset.current=String(button.dataset.previewDirection===direction);
@@ -252,7 +257,7 @@ joystick=initJoystick(direction=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&!event.defaultPrevented&&!event.repeat){
     if($('#authDialog').open)$('#authDialog').close();
-    else if(api.hasAccess){event.preventDefault();stopManual();}
+    else if(manualActive||api.hasAccess||joystick.direction){event.preventDefault();requestStop();}
   }
 });
 
