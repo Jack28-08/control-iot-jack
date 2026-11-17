@@ -7,8 +7,11 @@ Hasta que exista ese contrato y se valide en banco, la selección diagonal
 queda sin orden de movimiento. Si antes había una dirección activa, se libera
 con la detención lógica existente. Las flechas compatibles pulsadas casi a
 la vez forman una diagonal visual; al soltar una, la dirección restante se
-previsualiza hasta que el usuario realiza un nuevo gesto. Los botones
-diagonales dedicados permiten revisar los cuatro sectores en pantalla táctil.
+previsualiza hasta que el usuario realiza un nuevo gesto. En puntero y
+pantalla táctil, los sectores diagonales se seleccionan en el mismo disco.
+Las marcas iluminadas corresponden al ángulo y el ámbar distingue una
+selección sin envío. Un cambio de orientación invalida el puntero activo:
+si el gesto había enviado una orden, solicita DETENER una vez.
 
 ## Firmware localizado
 
