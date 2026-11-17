@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#080d16" />
+  <meta name="theme-color" content="#091015" />
   <meta name="description" content="NODE/01: control y monitoreo del vehículo IoT, con joystick, secuencias y registros de movimientos." />
   <title>NODE/01 — Control y monitoreo IoT</title>
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous" />
-  <link rel="stylesheet" href="./css/styles.css?v=2" />
-  <script type="module" src="./js/main.js?v=2"></script>
+  <link rel="stylesheet" href="./css/styles.css?v=3" />
+  <script type="module" src="./js/main.js?v=3"></script>
 </head>
 <body>
   <div class="page-wrap">
     <header class="site-header">
       <div class="header-row">
         <div class="brand" aria-label="NODE/01">
-          <span class="brand-emblem" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 20h20M10 20V9h12v11M13 13h6M8 25h16M16 3v5"/></svg></span>
+          <span class="brand-emblem" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 23V9l18 14V9M7 16h4m10 0h4"/><circle cx="7" cy="23" r="1.5"/><circle cx="25" cy="9" r="1.5"/></svg></span>
           <strong>NODE<span>/01</span></strong>
         </div>
         <div class="header-unit">
@@ -62,35 +62,39 @@
       <section id="controlView" class="view-panel control-workspace" role="tabpanel" aria-labelledby="showControl">
         <section class="panel control-panel" aria-labelledby="joystickTitle">
           <div class="panel-head">
-            <h2 id="joystickTitle">Joystick</h2>
-            <div class="movement-badge"><span class="movement-dot" aria-hidden="true"></span><strong id="directionStatus" role="status" aria-live="polite">Neutral</strong></div>
+            <h2 id="joystickTitle">Control remoto</h2>
+            <div class="direction-readout" role="status" aria-live="polite" aria-atomic="true">
+              <strong id="directionStatus">Neutral</strong>
+              <span id="directionAvailability" hidden>Diagonales sin soporte físico</span>
+            </div>
           </div>
           <div class="control-stage">
-            <div class="joystick-boundary" id="joystick" role="group" tabindex="0" aria-label="Joystick de ocho direcciones" aria-describedby="joystickHelp diagonalNote">
+            <div class="joystick-boundary" id="joystick" role="group" tabindex="0" aria-label="Joystick de ocho direcciones" aria-describedby="joystickHelp">
               <div class="joystick-bezel" aria-hidden="true">
-                <span class="axis top" data-axis="up">↑</span><span class="axis bottom" data-axis="down">↓</span><span class="axis left" data-axis="left">←</span><span class="axis right" data-axis="right">→</span>
-                <div class="joystick-cross"></div><div class="joystick-stick" id="joystickStick"><span class="joystick-led"></span></div>
+                <div class="joystick-track"></div>
+                <span class="sector-mark" data-axis="up">↑</span>
+                <span class="sector-mark" data-axis="up-right">↗</span>
+                <span class="sector-mark" data-axis="right">→</span>
+                <span class="sector-mark" data-axis="down-right">↘</span>
+                <span class="sector-mark" data-axis="down">↓</span>
+                <span class="sector-mark" data-axis="down-left">↙</span>
+                <span class="sector-mark" data-axis="left">←</span>
+                <span class="sector-mark" data-axis="up-left">↖</span>
+                <div class="joystick-stick" id="joystickStick"><span class="joystick-led"></span></div>
               </div>
             </div>
-            <div class="diagonal-pad" role="group" aria-label="Vista previa de diagonales" aria-describedby="diagonalNote">
-              <button type="button" data-direction="up-left" data-preview-direction="up-left" aria-label="Avanzar a la izquierda, vista previa"><span aria-hidden="true">↖</span></button>
-              <button type="button" data-direction="up-right" data-preview-direction="up-right" aria-label="Avanzar a la derecha, vista previa"><span aria-hidden="true">↗</span></button>
-              <button type="button" data-direction="down-left" data-preview-direction="down-left" aria-label="Retroceder a la izquierda, vista previa"><span aria-hidden="true">↙</span></button>
-              <button type="button" data-direction="down-right" data-preview-direction="down-right" aria-label="Retroceder a la derecha, vista previa"><span aria-hidden="true">↘</span></button>
-            </div>
           </div>
-          <p id="diagonalNote" class="diagonal-note">Diagonales · solo vista previa</p>
-          <p id="joystickHelp" class="visually-hidden">Arrastra o combina dos flechas compatibles. Si se solicitó un movimiento, soltar el joystick, perder el foco o pulsar Escape solicita detener.</p>
+          <p id="joystickHelp" class="visually-hidden">Arrastra o combina dos flechas compatibles. Las direcciones diagonales requieren soporte físico. Si se solicitó un movimiento, soltar el joystick, perder el foco o pulsar Escape solicita detener.</p>
           <button id="stopButton" class="stop-button" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" /></svg><span>DETENER</span></button>
         </section>
 
-        <section class="panel actions-panel" aria-label="Acciones del vehículo">
+        <section class="panel actions-panel" aria-labelledby="commandsTitle">
           <div class="panel-head commands-head">
-            <h2 id="commandsTitle">Mandos</h2>
+            <h2 id="commandsTitle">Mandos del vehículo</h2>
             <span id="commandsCount" class="visually-hidden">0 movimientos</span>
             <span id="controlAvailability" class="panel-counter" role="status">Comprobando acceso</span>
           </div>
-          <div id="commandPanel" class="action-content" aria-labelledby="commandsTitle">
+          <div id="commandPanel" class="action-content">
             <div class="control-buttons" id="commandButtons" aria-live="polite"><p class="empty-state">Cargando movimientos…</p></div>
           </div>
         </section>
@@ -173,7 +177,7 @@
         <summary class="btn-ghost" aria-label="Detalles de la operación" title="Detalles de la operación">Detalles</summary>
         <div class="feedback-detail">
           <span id="operationTime" class="feedback-time"></span>
-          <p id="operationDetail">La interfaz muestra órdenes y eventos del servidor; no certifica que el vehículo se haya movido.</p>
+          <p id="operationDetail">Aquí se informa la respuesta de la API y el último evento del servidor. La actuación física requiere comprobación aparte.</p>
           <p id="noticeDetail" hidden></p>
         </div>
       </details>

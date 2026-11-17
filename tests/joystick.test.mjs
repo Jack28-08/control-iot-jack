@@ -4,13 +4,12 @@ import {initJoystick} from '../js/joystick.js';
 
 const event=(type,props={})=>Object.assign(new Event(type,{cancelable:true}),props);
 class Element extends EventTarget {
-  style={}; dataset={}; attributes=new Map(); capture=null; classes=new Set();
+  style={}; dataset={}; capture=null; classes=new Set();
   classList={
     remove:name=>this.classes.delete(name),
     toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name),
   };
   focus(){}
-  setAttribute(name,value){this.attributes.set(name,value);}
   getBoundingClientRect(){return {left:0,top:0,width:200,height:200};}
   setPointerCapture(id){this.capture=id;}
   hasPointerCapture(id){return this.capture===id;}
@@ -20,25 +19,25 @@ class Element extends EventTarget {
     this.dispatchEvent(event('lostpointercapture',{pointerId:id}));
   }
 }
-function setup(t,{onDirection,chordDelay=0,initialEnabled=true,alwaysPreview=false,diagonals=[]}={}){
+function setup(t,{onDirection,onPreview,chordDelay=0,initialEnabled=true,alwaysPreview=false}={}){
   const oldDocument=globalThis.document,oldWindow=globalThis.window;
   const el=new Element(),knob=new Element(),win=new EventTarget(),doc=new EventTarget();
+  win.innerWidth=360;win.innerHeight=640;
   doc.hidden=false;doc.querySelector=s=>s==='#joystick'?el:knob;
   globalThis.document=doc;globalThis.window=win;
   t.after(()=>{globalThis.document=oldDocument;globalThis.window=oldWindow;});
   const directions=[], releases=[], previews=[];
-  const diagonalButtons=diagonals.map(direction=>{const button=new Element();button.dataset.direction=direction;return button;});
   let enabled=initialEnabled;
   const joystick=initJoystick(d=>{directions.push(d);return onDirection?.(d);},meta=>releases.push(meta),{
-    chordDelay,diagonalButtons,isEnabled:()=>enabled,isPreviewEnabled:()=>alwaysPreview||enabled,
-    onPreview:(direction,meta)=>previews.push({direction,...meta}),
+    chordDelay,isEnabled:()=>enabled,isPreviewEnabled:()=>alwaysPreview||enabled,
+    onPreview:(direction,meta)=>{previews.push({direction,...meta});onPreview?.(direction);},
   });
   t.after(()=>joystick.destroy());
-  const pointer=(type,x=100,y=100,props={},target=el)=>target.dispatchEvent(event(type,{
+  const pointer=(type,x=100,y=100,props={})=>el.dispatchEvent(event(type,{
     pointerId:1,pointerType:'mouse',button:0,buttons:1,isPrimary:true,clientX:x,clientY:y,...props,
   }));
-  const key=(type,key,props={},target=el)=>target.dispatchEvent(event(type,{key,repeat:false,...props}));
-  return {el,knob,doc,win,joystick,directions,pointer,key,previews,diagonalButtons,releaseEvents:releases,
+  const key=(type,key,props={})=>el.dispatchEvent(event(type,{key,repeat:false,...props}));
+  return {el,knob,doc,win,joystick,directions,pointer,key,previews,releaseEvents:releases,
     get releases(){return releases.length;},setEnabled:v=>enabled=v};
 }
 
@@ -226,53 +225,67 @@ test('estado visual funciona con acceso cerrado y sólo despacha diagonales al c
   assert.equal(h.el.dataset.direction,'neutral');
 });
 
-test('un botón diagonal con otro dedo puede sustituir el joystick sin reactivar el gesto anterior',t=>{
-  const h=setup(t,{diagonals:['up-right']});
-  const [button]=h.diagonalButtons;
-  h.pointer('pointerdown',100,50,{pointerType:'touch'});
+test('un dedo recorre los sectores del joystick; otro dedo no roba la captura',t=>{
+  const h=setup(t);
+  const first={pointerType:'touch'};
   const second={pointerType:'touch',pointerId:2,isPrimary:false};
-  h.pointer('pointerdown',100,50,second,button);
-  assert.equal(h.el.capture,null);
-  assert.equal(button.capture,2);
-  assert.equal(button.attributes.get('aria-pressed'),'true');
-  assert.deepEqual(h.directions,['up','up-right']);
-  h.pointer('pointerup',100,50,{pointerType:'touch'}); // Soltar el primer dedo no afecta al segundo.
-  assert.equal(h.el.dataset.direction,'up-right');
-  h.pointer('pointercancel',100,50,second,button);
-  assert.equal(button.attributes.get('aria-pressed'),'false');
-  assert.equal(h.el.dataset.direction,'neutral');
-  assert.equal(h.releases,1);
-  h.pointer('pointermove',100,5,{pointerType:'touch'});
-  h.pointer('pointerup',100,5,{pointerType:'touch'});
-  assert.deepEqual(h.directions,['up','up-right']);
+  h.pointer('pointerdown',100,50,first);
+  h.pointer('pointerdown',55,145,second);
+  h.pointer('pointermove',45,145,second);
+  h.pointer('pointerup',45,145,second);
+  assert.equal(h.el.capture,1);
+  assert.deepEqual(h.directions,['up']);
+  h.pointer('pointermove',150,50,first);
+  h.pointer('pointermove',150,100,first);
+  assert.deepEqual(h.directions,['up','up-right','right']);
+  h.pointer('pointerup',150,100,first);
+  assert.equal(h.joystick.direction,null);
   assert.equal(h.releases,1);
 });
 
-test('el botón diagonal admite teclado y activación de lector de pantalla',t=>{
+test('cambiar de orientación invalida la captura y una nueva pulsación usa las medidas nuevas',t=>{
+  const h=setup(t);
+  h.pointer('pointerdown',100,45,{pointerType:'touch'});
+  h.win.innerHeight=610;
+  h.win.dispatchEvent(event('resize'));
+  assert.equal(h.el.capture,1,'un cambio de altura en vertical conserva el gesto');
+  [h.win.innerWidth,h.win.innerHeight]=[610,360];
+  h.win.dispatchEvent(event('resize'));
+  h.win.dispatchEvent(event('orientationchange'));
+  assert.deepEqual(h.releaseEvents,[{source:'pointer',held:false,reason:'orientation'}]);
+  assert.equal(h.el.capture,null);
+  assert.equal(h.el.dataset.direction,'neutral');
+  h.pointer('pointermove',190,100,{pointerType:'touch'});
+  assert.deepEqual(h.directions,['up']);
+  h.el.getBoundingClientRect=()=>({left:20,top:10,width:100,height:100});
+  h.pointer('pointerdown',91,81,{pointerType:'touch'});
+  assert.deepEqual(h.directions,['up','down-right']);
+});
+
+test('orientación cancela una tecla durante el margen del acorde',t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const h=setup(t,{diagonals:['down-right']});
-  const [button]=h.diagonalButtons;
-  h.key('keydown',' ',{},button);
-  h.key('keydown',' ',{repeat:true},button);
-  assert.equal(h.el.dataset.direction,'down-right');
-  h.key('keyup',' ',{},button);
-  assert.equal(h.el.dataset.direction,'neutral');
-  button.dispatchEvent(event('click',{detail:1})); // Un click de puntero ya se procesó al presionar.
-  assert.equal(h.el.dataset.direction,'neutral');
-  button.dispatchEvent(event('click',{detail:0}));
-  assert.equal(h.el.dataset.direction,'down-right');
-  t.mock.timers.tick(650);
-  assert.equal(h.el.dataset.direction,'neutral');
-  assert.deepEqual(h.directions,['down-right','down-right']);
-  assert.equal(h.releases,2);
+  const h=setup(t,{chordDelay:65});
+  h.key('keydown','ArrowRight');
+  h.win.dispatchEvent(event('orientationchange'));
+  t.mock.timers.tick(65);
+  h.key('keyup','ArrowRight');
+  assert.equal(h.joystick.direction,null);
+  assert.deepEqual(h.directions,[]);
+  assert.deepEqual(h.releaseEvents,[{source:'keyboard',held:false,reason:'orientation'}]);
+});
+
+test('si la aplicación neutraliza al previsualizar, no sale una orden tardía',t=>{
+  const h=setup(t,{onPreview:direction=>{if(direction)h.joystick.neutral();}});
+  h.pointer('pointerdown',150,100);
+  assert.equal(h.joystick.direction,null);
+  assert.deepEqual(h.directions,[]);
 });
 
 test('destrucción libera captura, cancela tiempo y elimina listeners',t=>{
-  const h=setup(t,{diagonals:['down-left']});
-  const [button]=h.diagonalButtons;
-  h.pointer('pointerdown',100,100,{},button);
+  const h=setup(t);
+  h.pointer('pointerdown',50,150);
   h.joystick.destroy();
-  assert.equal(button.capture,null);
+  assert.equal(h.el.capture,null);
   assert.equal(h.el.dataset.direction,'neutral');
   h.key('keydown','ArrowUp');
   h.pointer('pointerdown',150,100);

@@ -2,29 +2,22 @@ import {directionVector, isDiagonal, KEY_DIRECTIONS, sectorForKeys, sectorForVec
 
 // Un breve margen permite formar un acorde sin enviar primero una cardinal.
 const DEFAULT_CHORD_MS = 65;
-const ACCESSIBLE_PREVIEW_MS = 650;
-const ACTIVATE_KEYS = new Set(['Enter', ' ']);
 
 export function initJoystick(onDirection, onRelease, {
   isEnabled = () => true,
   isPreviewEnabled = isEnabled,
   onPreview = () => {},
-  diagonalButtons = [],
   chordDelay = DEFAULT_CHORD_MS,
 } = {}) {
   const el = document.querySelector('#joystick');
   const knob = document.querySelector('#joystickStick');
-  const buttons = Array.from(diagonalButtons).filter(button => isDiagonal(button.dataset.direction));
   const listeners = new AbortController();
   const listen = (target, type, handler) => target.addEventListener(type, handler, {signal: listeners.signal});
 
   let pointer = null;
   let direction = null;
   let source = null;
-  let heldButton = null;
   let chordTimer = null;
-  let previewTimer = null;
-  let transferringFocus = false;
   const heldKeys = new Set();
 
   function geometry({width, height} = el.getBoundingClientRect()) {
@@ -42,28 +35,20 @@ export function initJoystick(onDirection, onRelease, {
     moveVisual(x * travel, y * travel);
   }
 
-  function clearTimers() {
+  function clearChord() {
     clearTimeout(chordTimer);
-    clearTimeout(previewTimer);
     chordTimer = null;
-    previewTimer = null;
-  }
-
-  function setActiveButton(button = null) {
-    for (const item of buttons) item.setAttribute('aria-pressed', String(item === button));
   }
 
   function clearInput() {
     const captured = pointer;
     pointer = null;
     heldKeys.clear();
-    heldButton = null;
-    clearTimers();
+    clearChord();
     // Invalidar el puntero antes de liberar la captura evita un segundo cierre.
-    if (captured?.element.hasPointerCapture(captured.id)) {
-      captured.element.releasePointerCapture(captured.id);
+    if (captured !== null && el.hasPointerCapture(captured)) {
+      el.releasePointerCapture(captured);
     }
-    setActiveButton();
   }
 
   function preview(next, input, previewOnly) {
@@ -85,6 +70,7 @@ export function initJoystick(onDirection, onRelease, {
   }
 
   function dispatch(next, input) {
+    if (direction !== next || !isPreviewEnabled()) return;
     if (!isDiagonal(next) && !isEnabled()) {
       preview(next, input, true);
       return;
@@ -94,8 +80,7 @@ export function initJoystick(onDirection, onRelease, {
 
   function apply(next, input, {previewOnly = false, defer = false, reason = 'center'} = {}) {
     if (next === direction) return;
-    clearTimeout(chordTimer);
-    chordTimer = null;
+    clearChord();
     if (!next) {
       const previousSource = source;
       preview(null, input, true);
@@ -105,56 +90,39 @@ export function initJoystick(onDirection, onRelease, {
     const diagonal = isDiagonal(next);
     const mayDispatch = !previewOnly && (diagonal || isEnabled());
     preview(next, input, diagonal || !mayDispatch);
-    if (!mayDispatch) return;
+    if (!mayDispatch || direction !== next) return;
 
     if (defer && !diagonal && chordDelay > 0) {
       chordTimer = setTimeout(() => {
         chordTimer = null;
-        if (direction === next && isPreviewEnabled()) dispatch(next, input);
+        dispatch(next, input);
       }, chordDelay);
       return;
     }
     dispatch(next, input);
   }
 
-  function focusInput(element) {
-    transferringFocus = true;
+  function startPointer(event) {
+    if (event.button !== 0 || event.isPrimary === false || pointer !== null || heldKeys.size || !isPreviewEnabled()) return;
     try {
-      element.focus({preventScroll: true});
-    } finally {
-      transferringFocus = false;
-    }
-  }
-
-  function startPointer(event, element, forced = null) {
-    if (event.button !== 0 || !isPreviewEnabled() || pointer?.id === event.pointerId) return;
-    if (!forced && (event.isPrimary === false || pointer || heldKeys.size || heldButton)) return;
-    try {
-      element.setPointerCapture(event.pointerId);
+      el.setPointerCapture(event.pointerId);
     } catch {
       return;
     }
-    clearInput();
-    pointer = {id: event.pointerId, element, forced};
-    focusInput(element);
-    if (forced) setActiveButton(element);
+    pointer = event.pointerId;
+    el.focus({preventScroll: true});
     updatePointer(event);
     event.preventDefault();
   }
 
   function updatePointer(event) {
-    if (pointer?.id !== event.pointerId) return;
+    if (pointer !== event.pointerId) return;
     if (!isPreviewEnabled()) {
       neutral({notify: true, reason: 'disabled'});
       return;
     }
     if (event.type === 'pointermove' && event.pointerType === 'mouse' && (event.buttons & 1) === 0) {
       neutral({notify: true});
-      return;
-    }
-    if (pointer.forced) {
-      moveToSector(pointer.forced);
-      apply(pointer.forced, 'button');
       return;
     }
     const bounds = el.getBoundingClientRect();
@@ -170,17 +138,8 @@ export function initJoystick(onDirection, onRelease, {
   }
 
   function finishPointer(event) {
-    if (pointer?.id !== event.pointerId) return;
+    if (pointer !== event.pointerId) return;
     neutral({notify: true, reason: event.type === 'pointerup' ? 'release' : event.type});
-  }
-
-  function bindPointer(element, forced = null) {
-    listen(element, 'pointerdown', event => startPointer(event, element, forced));
-    listen(element, 'pointermove', updatePointer);
-    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(element, type, finishPointer);
-    listen(element, 'blur', () => {
-      if (!transferringFocus) neutral({notify: true, reason: 'blur'});
-    });
   }
 
   function updateKeys({partial = false} = {}) {
@@ -189,7 +148,10 @@ export function initJoystick(onDirection, onRelease, {
     apply(next, 'keyboard', {previewOnly: partial, defer: true, reason: 'conflict'});
   }
 
-  bindPointer(el);
+  listen(el, 'pointerdown', startPointer);
+  listen(el, 'pointermove', updatePointer);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(el, type, finishPointer);
+  listen(el, 'blur', () => neutral({notify: true, reason: 'blur'}));
   listen(el, 'keydown', event => {
     if (event.defaultPrevented) return;
     if (event.key === 'Escape' || event.key === ' ') {
@@ -199,10 +161,7 @@ export function initJoystick(onDirection, onRelease, {
     }
     if (!Object.hasOwn(KEY_DIRECTIONS, event.key)) return;
     event.preventDefault();
-    if (!isPreviewEnabled() || pointer || heldButton || event.repeat || heldKeys.has(event.key)) return;
-    clearTimeout(previewTimer);
-    previewTimer = null;
-    setActiveButton();
+    if (!isPreviewEnabled() || pointer !== null || event.repeat || heldKeys.has(event.key)) return;
     heldKeys.add(event.key);
     updateKeys();
   });
@@ -212,37 +171,19 @@ export function initJoystick(onDirection, onRelease, {
     else neutral({notify: true});
   });
 
-  for (const button of buttons) {
-    const forced = button.dataset.direction;
-    bindPointer(button, forced);
-    listen(button, 'keydown', event => {
-      if (event.key === 'Escape') {
-        neutral({notify: true, reason: 'escape'});
-        return;
-      }
-      if (!ACTIVATE_KEYS.has(event.key)) return;
-      event.preventDefault();
-      if (event.repeat || !isPreviewEnabled()) return;
-      clearInput();
-      heldButton = {element: button, key: event.key};
-      moveToSector(forced);
-      setActiveButton(button);
-      apply(forced, 'button');
-    });
-    listen(button, 'keyup', event => {
-      if (heldButton?.element !== button || heldButton.key !== event.key) return;
-      event.preventDefault();
-      neutral({notify: true});
-    });
-    listen(button, 'click', event => {
-      // Activación de tecnología de asistencia sin una secuencia pointer/teclado.
-      if (event.detail !== 0 || pointer || heldButton || !isPreviewEnabled()) return;
-      clearInput();
-      moveToSector(forced);
-      setActiveButton(button);
-      apply(forced, 'button');
-      previewTimer = setTimeout(() => neutral({notify: true}), ACCESSIBLE_PREVIEW_MS);
-    });
+  const isLandscape = () => window.innerWidth > window.innerHeight;
+  let landscape = isLandscape();
+  function endForOrientation() {
+    landscape = isLandscape();
+    neutral({notify: true, reason: 'orientation'});
+  }
+  listen(window, 'resize', () => {
+    if (landscape !== isLandscape()) endForOrientation();
+  });
+  if (window.screen?.orientation?.addEventListener) {
+    listen(window.screen.orientation, 'change', endForOrientation);
+  } else {
+    listen(window, 'orientationchange', endForOrientation);
   }
 
   listen(window, 'blur', () => neutral({notify: true, reason: 'blur'}));
@@ -250,7 +191,6 @@ export function initJoystick(onDirection, onRelease, {
     if (document.hidden) neutral({notify: true, reason: 'hidden'});
   });
   el.dataset.direction = 'neutral';
-  setActiveButton();
 
   return {
     neutral,

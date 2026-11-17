@@ -65,9 +65,22 @@ export function renderCommands(catalog,onClick){
     (movementGroup(a.nombre)==='drive'?0:1)-(movementGroup(b.nombre)==='drive'?0:1)||a.codigo-b.codigo);
   $('#commandsCount').textContent=`${sorted.length} ${sorted.length===1?'movimiento':'movimientos'}`;
   if(!sorted.length){target.append(node('p','No hay movimientos disponibles para este vehículo.','empty-state'));return;}
+  const groups=new Map();
   for(const c of sorted){
+    const group=movementGroup(c.nombre);
+    if(!groups.has(group)){
+      const title=group==='drive'?'Dirección':'Equipo';
+      const bank=node('div',undefined,'command-bank');
+      const grid=node('div',undefined,'command-grid');
+      bank.dataset.group=group;
+      bank.setAttribute('role','group');
+      bank.setAttribute('aria-label',title);
+      bank.append(node('h3',title,'command-group-title'),grid);
+      target.append(bank);
+      groups.set(group,grid);
+    }
     const b=node('button',undefined,'command-button');b.type='button';
-    if(movementGroup(c.nombre)==='extra')b.classList.add('is-extra');
+    if(group==='extra')b.classList.add('is-extra');
     b.dataset.commandId=String(c.id_comando);
     const label=formatMovement(c.nombre);
     const icon=node('span',movementIcon(c.nombre),'cmd-icon');icon.setAttribute('aria-hidden','true');
@@ -76,7 +89,7 @@ export function renderCommands(catalog,onClick){
     b.append(icon,copy);
     b.title=Number.isInteger(c.codigo)?`${label} · Código ${c.codigo}`:label;
     b.setAttribute('aria-label',label);
-    b.addEventListener('click',()=>onClick(c));target.append(b);
+    b.addEventListener('click',()=>onClick(c));groups.get(group).append(b);
     if(focusedId===b.dataset.commandId)b.focus({preventScroll:true});
   }
 }
@@ -156,6 +169,14 @@ export function setDemoButtons({canStart=false,canCancel=false,selectionDisabled
   $('#demoSelect').disabled=selectionDisabled;
 }
 export function displayMovement(label){$('#movementDisplay').textContent=formatMessage(label,'Neutral');}
+export function displayDirection(label,{unsupported=false,preview=false}={}){
+  const direction=$('#directionStatus');
+  const availability=$('#directionAvailability');
+  const directionLabel=preview&&!unsupported&&label!=='Neutral'?`${label} · Sin envío`:label;
+  if(direction.textContent!==directionLabel)direction.textContent=directionLabel;
+  availability.hidden=!unsupported;
+  $('.control-panel').dataset.preview=String(preview);
+}
 export function displayVehicle(name){
   const title=formatName(name,'Vehículo sin verificar');
   $('#unitName').textContent=title;$('#unitName').title=title;

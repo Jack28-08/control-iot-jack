@@ -9,7 +9,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE
   ?pathToFileURL(process.env.PLAYWRIGHT_MODULE).href:'playwright');
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const output=resolve(process.env.NODE01_EVIDENCE_DIR??process.env.NODE42_EVIDENCE_DIR??resolve(root,'evidencias/redisenio/simulacion'));
+const output=resolve(process.env.NODE01_EVIDENCE_DIR??resolve(root,'evidencias/definitivo/simulacion'));
 await mkdir(output,{recursive:true});
 const prefix='/control-iot-jack/';
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml'};
@@ -28,13 +28,18 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise((ok,bad)=>server.listen(0,'127.0.0.1',ok).on('error',bad));
 const local='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXE||undefined});
+const browser=await chromium.launch({
+  headless:true,executablePath:process.env.BROWSER_EXE||undefined,args:['--no-proxy-server'],
+});
 const api='https://184-72-72-255.sslip.io';
 const ws='wss://184-72-72-255.sslip.io/ws/vehiculos/1';
 const fixtureBearer='A'.repeat(43);
 const stamp=id=>new Date(Date.UTC(2026,10,13,16,0,id)).toISOString();
 const bootstrap=await readFile(resolve(root,'.local/bootstrap-5.3.3.min.css'),'utf8').catch(()=>null);
-const viewports=[[320,568],[360,640],[360,740],[390,844],[412,915],[667,375],[844,390],[915,412],[768,1024],[1440,900]];
+const viewports=[
+  [320,568],[360,640],[360,740],[390,844],[412,915],
+  [667,375],[844,390],[915,412],[768,1024],[1024,768],[1366,768],[1440,900],
+];
 const baseCommands=['AVANZAR','RETROCEDER','GI','GIRAR_DERECHA','CAMBIAR_VELOCIDAD','SUBIR_GRUA','BAJAR_GRUA','DEMO'];
 const report={mode:'browser_local_with_rest_and_wss_doubles',browser:`Chromium ${browser.version()}`,
   real_posts:0,bootstrapFixture:Boolean(bootstrap),viewports:[],scenarios:{},images:[]};
@@ -159,21 +164,21 @@ async function scenario(width,height){
   return f;
 }
 
-async function checkLayout(page,view,{allowVertical=false}={}){
-  const layout=await page.evaluate(({view,allowVertical})=>{
+async function checkLayout(page,view,{allowVertical=false,direction='neutral'}={}){
+  const layout=await page.evaluate(({view,allowVertical,direction,sectors})=>{
     const {documentElement:html,scrollingElement:doc}=document;
     const limits={width:html.clientWidth,height:html.clientHeight};
     const controlView=view==='control';
     const common=['#showControl','#showMonitor','#showDemos','#retryConnectionButton','#credentialsButton','#accessState',
       '#wsStatus','#apiStatus','#dbStatus','.feedback-panel','.site-footer'];
-    const control=['#joystick','#joystickStick','#stopButton','#directionStatus','#diagonalNote',
-      '#commandButtons button','[data-preview-direction]'];
+    const control=['#joystick','#joystickStick','#stopButton','#directionStatus','#directionAvailability',
+      '#commandButtons button','#joystick .sector-mark'];
     const demo=['#demoSelect','#demoSteps','#startDemoButton','#cancelDemoButton','#stopDemoButton'];
     const monitor=['#monitorMovement','#monitorDate','#monitorTime','#monitorCode','#monitorRefresh',
       '.history-table thead th','#historyRows td','#historyPagination','#historyPrevious','#historyNext'];
     const selectors=[...common,...{control,demo,monitor}[view]];
     const rect=e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,r:b.right,b:b.bottom,w:b.width,h:b.height};};
-    const visible=e=>!e.closest('[hidden]')&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';
+    const visible=e=>Boolean(e&&!e.closest('[hidden]')&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');
     const elements=selectors.flatMap(s=>Array.from(document.querySelectorAll(s),e=>({selector:s,e}))).filter(({e})=>visible(e));
     const clipped=[];
     const textOverflow=[];
@@ -182,7 +187,7 @@ async function checkLayout(page,view,{allowVertical=false}={}){
       const outsideX=b.x<-.75||b.r>limits.width+.75;
       const outsideY=!allowVertical&&(b.y<-.75||b.b>limits.height+.75);
       if(outsideX||outsideY||b.w<=0||b.h<=0)clipped.push({selector,...b});
-      if(e.matches('button,select,th,td,#directionStatus,#diagonalNote')&&
+      if(e.matches('button,select,th,td,#directionStatus,#directionAvailability')&&
         e.clientWidth>0&&e.scrollWidth-e.clientWidth>1)textOverflow.push({selector,text:e.textContent?.trim()});
     }
     const touch=[];
@@ -203,7 +208,23 @@ async function checkLayout(page,view,{allowVertical=false}={}){
     }
     const joystick=document.querySelector('#joystick'),knob=document.querySelector('#joystickStick');
     const j=rect(joystick),k=rect(knob);
-    const centered=!controlView||Math.abs(j.x+j.w/2-k.x-k.w/2)<2&&Math.abs(j.y+j.h/2-k.y-k.h/2)<2;
+    const centerX=j.x+j.w/2,centerY=j.y+j.h/2;
+    const centered=!controlView||direction!=='neutral'||Math.abs(centerX-k.x-k.w/2)<2&&Math.abs(centerY-k.y-k.h/2)<2;
+    const marks=[...joystick.querySelectorAll('.sector-mark[data-axis]')].filter(visible);
+    const invalidSectors=marks.flatMap(mark=>{
+      const b=rect(mark);
+      const sector=sectors.find(([axis])=>axis===mark.dataset.axis);
+      const offsetX=b.x+b.w/2-centerX,offsetY=b.y+b.h/2-centerY;
+      const [dx,dy]=sector?.slice(1,3)??[null,null];
+      const inside=b.x>=j.x-1&&b.r<=j.r+1&&b.y>=j.y-1&&b.b<=j.b+1;
+      const compassX=dx===0?Math.abs(offsetX)<j.w*.125:dx*offsetX>j.w*.125;
+      const compassY=dy===0?Math.abs(offsetY)<j.h*.125:dy*offsetY>j.h*.125;
+      const interactive=mark.matches('button, a[href], input, select, textarea, [role="button"], [tabindex]');
+      return inside&&compassX&&compassY&&!interactive?[]:[{axis:mark.dataset.axis,inside,compassX,compassY,interactive}];
+    });
+    const integratedSectors=marks.length===8&&new Set(marks.map(mark=>mark.dataset.axis)).size===8&&
+      invalidSectors.length===0&&!document.querySelector('[data-preview-direction], .diagonal-pad');
+    const diagonalNoticeVisible=visible(document.querySelector('#directionAvailability'));
     const userLabels=[...document.querySelectorAll('#commandButtons button,#monitorMovement,#historyRows td:nth-child(2),#movementDisplay')]
       .filter(visible).map(e=>e.textContent+' '+(e.getAttribute('aria-label')??'')+' '+(e.title??''));
     const overflow=[doc.scrollWidth-limits.width,doc.scrollHeight-limits.height];
@@ -212,23 +233,24 @@ async function checkLayout(page,view,{allowVertical=false}={}){
     const stopSelector={control:'#stopButton',demo:'#stopDemoButton'}[view];
     const stopVisible=!stopSelector||elements.some(({selector,e})=>selector===stopSelector&&/detener/i.test(e.textContent));
     const tabsVisible=['#showControl','#showMonitor','#showDemos'].every(id=>elements.some(({selector})=>selector===id));
-    const previewCount=[...document.querySelectorAll('[data-preview-direction]')].filter(visible).length;
     const commandCount=[...document.querySelectorAll('#commandButtons button')].filter(visible).length;
     const monitorVisible=!controlView&&view==='monitor'
       ?elements.some(({selector})=>selector==='#monitorMovement')&&elements.some(({selector})=>selector==='#historyRows td') :true;
     const demoVisible=view!=='demo'||['#demoSelect','#demoSteps','#startDemoButton','#cancelDemoButton']
       .every(id=>elements.some(({selector})=>selector===id));
     return {viewport:limits,overflow,clipped,touch,covered,overlaps,textOverflow,centered,scrollable,footerVisible,
-      stopVisible,tabsVisible,previewCount,commandCount,monitorVisible,demoVisible,
+      stopVisible,tabsVisible,integratedSectors,invalidSectors,diagonalNoticeVisible,commandCount,monitorVisible,demoVisible,
       labelsClean:userLabels.every(s=>!/_|\b(?:undefined|null)\b/i.test(s)),
       horizontalGrid:!controlView||limits.width<570||limits.width<=limits.height||rect(document.querySelector('.actions-panel')).x>j.x};
-  },{view,allowVertical});
+  },{view,allowVertical,direction,sectors});
   for(const [key,ok] of Object.entries({
     noOverflow:layout.overflow[0]===0&&(allowVertical||layout.overflow[1]===0),
     clipped:layout.clipped.length===0,touch:layout.touch.length===0,covered:layout.covered.length===0,
     overlaps:layout.overlaps.length===0,textOverflow:layout.textOverflow.length===0,centered:layout.centered,scrollable:layout.scrollable,
     footerVisible:layout.footerVisible,stopVisible:layout.stopVisible,labelsClean:layout.labelsClean,horizontalGrid:layout.horizontalGrid,
-    tabsVisible:layout.tabsVisible,controlButtons:view!=='control'||layout.previewCount===4&&layout.commandCount===8,
+    tabsVisible:layout.tabsVisible,controlButtons:view!=='control'||layout.commandCount===8,
+    integratedSectors:view!=='control'||layout.integratedSectors,
+    diagonalNotice:view!=='control'||layout.diagonalNoticeVisible===direction.includes('-'),
     monitorVisible:layout.monitorVisible,demoVisible:layout.demoVisible,
   })){
     assert(ok,view+' '+key+' '+JSON.stringify(layout));
@@ -292,6 +314,11 @@ const joystickDirection=async(page,direction)=>{
   await wait(async()=>await page.locator('#joystick').getAttribute('data-direction')===direction,
     'Joystick visual no muestra '+direction);
   await label(page,'#directionStatus',directionLabels[direction]);
+  const availability=page.locator('#directionAvailability');
+  if(direction.includes('-')){
+    assert(await availability.isVisible(),'la diagonal no explica su disponibilidad');
+    assert.match(await availability.textContent(),/vista previa|no (?:disponible|habilitad[ao]|admit\w*)|sin (?:orden|soporte)/i);
+  }else assert(!await availability.isVisible(),'se muestra el aviso diagonal fuera de una diagonal');
 };
 const motionPosts=f=>f.posts.filter(p=>p.path==='/vehiculos/1/movimientos');
 const stopPosts=f=>f.posts.filter(p=>p.path==='/vehiculos/1/detener');
@@ -320,6 +347,7 @@ async function checkDirectionalPointer(){
         await vector(dx*.985-dy*.04,dy*.985+dx*.04);
         await joystickDirection(page,direction);
       }else if(direction==='up-right'){
+        await checkLayout(page,'control',{direction});
         await image(page,'joystick-diagonal-844x390',2,'Vista previa angular en el navegador local. La diagonal no genera una orden, con REST y WSS simulados.');
       }
       await page.mouse.up();
@@ -364,9 +392,43 @@ async function checkDirectionalPointer(){
     assert.equal(motionPosts(f).at(-1).id,4);
     await page.mouse.up();
     await wait(()=>stopPosts(f).length===beforeCenterStops+2,'no se detuvo al soltar el puntero conservado');
+
+    // Los mismos sectores sirven al pulsar directamente sobre el disco.
+    await joystickReady(page);
+    const beforeDirect=f.posts.length;
+    await vector(-1,1);
+    await page.mouse.down();
+    await joystickDirection(page,'down-left');
+    await page.mouse.up();
+    await joystickDirection(page,'neutral');
+    assert.equal(f.posts.length,beforeDirect,'la pulsación directa en una diagonal generó una orden');
+
+    const stick=page.locator('#joystick');
+    await stick.evaluate(element=>{
+      element.addEventListener('gotpointercapture',event=>{
+        element.dataset.capturedPointer=String(event.pointerId);
+      },{once:true});
+    });
+    const beforeCaptureMoves=motionPosts(f).length,beforeCaptureStops=stopPosts(f).length;
+    await page.mouse.move(x,y);
+    await page.mouse.down();
+    await vector(0,-1);
+    await wait(()=>motionPosts(f).length===beforeCaptureMoves+1,'no se movió antes de perder captura');
+    await stick.evaluate(element=>{
+      const pointerId=Number(element.dataset.capturedPointer);
+      if(!element.hasPointerCapture(pointerId))throw Error('no se obtuvo captura real de puntero');
+      element.releasePointerCapture(pointerId);
+      delete element.dataset.capturedPointer;
+    });
+    await vector(1,0);
+    await joystickDirection(page,'neutral');
+    await wait(()=>stopPosts(f).length===beforeCaptureStops+1,'perder captura no solicitó DETENER');
+    await page.mouse.up();
+    assert.equal(motionPosts(f).length,beforeCaptureMoves+1);
+    assert.equal(stopPosts(f).length,beforeCaptureStops+1);
     assert(f.posts.every(p=>p.authorized));
     report.scenarios.angularSectors={tested:sectors.map(([direction])=>direction),neutral:true,mouse:true,
-      transitionToPreviewStops:true,centerRetainsPointer:true,diagonalPosts:0};
+      transitionToPreviewStops:true,centerRetainsPointer:true,directSectorPress:true,lostCapture:true,diagonalPosts:0};
   }finally{await f.ctx.close();}
 }
 
@@ -375,7 +437,17 @@ async function checkDirectionalKeyboard(){
   try{
     const {page}=f;
     await joystickReady(page);
-    await page.locator('#joystick').focus();
+    const joystick=page.locator('#joystick');
+    assert.match(await joystick.getAttribute('aria-label'),/joystick.*ocho/i);
+    const descriptions=(await joystick.getAttribute('aria-describedby')??'').split(/\s+/).filter(Boolean);
+    const keyboardHelp=(await Promise.all(descriptions.map(id=>page.locator('#'+id).textContent()))).join(' ');
+    assert.match(keyboardHelp,/flechas/i,'el joystick no describe el uso por teclado');
+    await joystick.focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'stopButton','DETENER no sigue al joystick en el orden de foco');
+    assert(await page.locator('#stopButton').evaluate(e=>e.matches(':focus-visible')),'DETENER sin foco visible');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'joystick');
     for(const [direction,k1,k2,remainder] of [
       ['up-right','ArrowUp','ArrowRight','up'],['up-left','ArrowUp','ArrowLeft','up'],
       ['down-right','ArrowDown','ArrowRight','down'],['down-left','ArrowDown','ArrowLeft','down'],
@@ -402,27 +474,23 @@ async function checkDirectionalKeyboard(){
       assert.equal(f.posts.length,0,'una combinación opuesta emitió una orden');
     }
 
-    // La pérdida de foco neutraliza un cardinal que salió antes de la combinación.
-    await page.keyboard.down('ArrowLeft');
-    await wait(()=>motionPosts(f).length===1,'flecha individual no envió un movimiento');
-    await page.locator('#showControl').focus();
-    await wait(()=>stopPosts(f).length===1,'el joystick no se detuvo al perder foco');
-    await joystickDirection(page,'neutral');
-    await page.keyboard.up('ArrowLeft');
-    assert.equal(stopPosts(f).length,1);
-    await joystickReady(page);
-    const preview=page.locator('[data-preview-direction="up-left"]');
-    await preview.focus();
-    await page.keyboard.down('Enter');
-    await joystickDirection(page,'up-left');
-    assert.equal(await preview.getAttribute('aria-pressed'),'true');
-    await page.keyboard.up('Enter');
-    await joystickDirection(page,'neutral');
-    assert.equal(await preview.getAttribute('aria-pressed'),'false');
-    assert.equal(motionPosts(f).length,1);
-    assert.equal(stopPosts(f).length,1);
-    report.scenarios.keyboardChords={tested:4,partialRelease:true,oppositeAxes:true,focusLoss:true,
-      accessibleButton:true,diagonalPosts:0};
+    const cardinalKeys=[['up','ArrowUp',1],['right','ArrowRight',4],['down','ArrowDown',2],['left','ArrowLeft',3]];
+    for(const [index,[direction,key,id]] of cardinalKeys.entries()){
+      await joystickReady(page);
+      await page.keyboard.down(key);
+      await joystickDirection(page,direction);
+      await wait(()=>motionPosts(f).length===index+1,'flecha individual no envió un movimiento');
+      assert.equal(motionPosts(f).at(-1).id,id);
+      if(direction==='down')await page.keyboard.press('Escape');
+      if(direction==='left')await page.locator('#showControl').focus();
+      await page.keyboard.up(key);
+      await wait(()=>stopPosts(f).length===index+1,'el teclado no solicitó DETENER');
+      await joystickDirection(page,'neutral');
+    }
+    assert.equal(motionPosts(f).length,4);
+    assert.equal(stopPosts(f).length,4);
+    report.scenarios.keyboardChords={tested:8,partialRelease:true,oppositeAxes:true,focusLoss:true,
+      stopNextInFocusOrder:true,escape:true,diagonalPosts:0};
   }finally{await f.ctx.close();}
 }
 
@@ -432,29 +500,35 @@ async function checkDirectionalTouch(){
     const {page,ctx}=f;
     await joystickReady(page);
     const stick=await page.locator('#joystick').boundingBox();
-    const diagonal=await page.locator('[data-preview-direction="down-right"]').boundingBox();
-    assert(stick&&diagonal,'controles táctiles de dirección fuera del viewport');
+    assert(stick,'el disco táctil del joystick está fuera del viewport');
     const cdp=await ctx.newCDPSession(page);
     const touch=(type,touchPoints=[])=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
     const first={x:stick.x+stick.width/2,y:stick.y+stick.height/2,id:1};
-    const second={x:diagonal.x+diagonal.width/2,y:diagonal.y+diagonal.height/2,id:2};
+    const firstDiagonal={...first,x:first.x+stick.width*.24,y:first.y+stick.height*.24};
+    const second={x:first.x-stick.width*.3,y:first.y,id:2};
+    const secondUp={...second,x:first.x,y:first.y-stick.height*.32};
     await touch('touchStart',[first]);
-    await touch('touchStart',[first,second]);
+    await touch('touchMove',[firstDiagonal]);
+    await joystickDirection(page,'down-right');
+    await touch('touchStart',[firstDiagonal,second]);
+    await touch('touchMove',[firstDiagonal,secondUp]);
     await joystickDirection(page,'down-right');
     await touch('touchEnd',[second]);
-    await joystickDirection(page,'neutral');
-    await touch('touchMove',[{...first,y:first.y-stick.height*.3}]);
+    await joystickDirection(page,'down-right');
     await touch('touchEnd');
-    assert.equal(f.posts.length,0,'liberar un dedo de una vista previa reanudó una orden');
+    await joystickDirection(page,'neutral');
+    assert.equal(f.posts.length,0,'un dedo secundario o una diagonal generaron una orden');
 
     await touch('touchStart',[first]);
-    await touch('touchStart',[first,second]);
+    await touch('touchMove',[firstDiagonal]);
+    await touch('touchStart',[firstDiagonal,second]);
     await joystickDirection(page,'down-right');
     await touch('touchEnd',[first]);
-    await joystickDirection(page,'down-right');
-    await touch('touchEnd');
     await joystickDirection(page,'neutral');
-    assert.equal(f.posts.length,0,'la liberación en orden inverso generó una orden');
+    await touch('touchMove',[secondUp]);
+    await joystickDirection(page,'neutral');
+    await touch('touchEnd');
+    assert.equal(f.posts.length,0,'liberar el dedo principal rearmó el joystick con el secundario');
 
     await touch('touchStart',[first]);
     await touch('touchMove',[{...first,y:first.y-stick.height*.32}]);
@@ -464,7 +538,45 @@ async function checkDirectionalTouch(){
     await wait(()=>stopPosts(f).length===1,'pointercancel no envió DETENER');
     assert.equal(motionPosts(f).length,1);
     assert(f.posts.every(p=>p.authorized));
-    report.scenarios.multitouch={dedicatedPreview:true,partialRelease:true,allReleased:true,pointerCancel:true,diagonalPosts:0};
+    report.scenarios.multitouch={integratedPreview:true,secondaryIgnored:true,releaseBothOrders:true,
+      pointerCancel:true,diagonalPosts:0};
+  }finally{await f.ctx.close();}
+}
+
+async function checkOrientationChange(){
+  const f=await scenario(390,844);
+  try{
+    const {page,ctx}=f;
+    await joystickReady(page);
+    const box=await page.locator('#joystick').boundingBox();
+    assert(box,'joystick fuera del viewport antes de rotar');
+    const cdp=await ctx.newCDPSession(page);
+    const origin={x:box.x+box.width/2,y:box.y+box.height/2,id:1};
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[origin]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...origin,y:origin.y-box.height*.34}]});
+    await joystickDirection(page,'up');
+    await wait(()=>motionPosts(f).length===1,'no se observó movimiento antes de rotar');
+
+    await page.setViewportSize({width:844,height:390});
+    await wait(()=>page.evaluate(()=>matchMedia('(orientation: landscape)').matches),'no se aplicó el cambio de orientación');
+    await joystickDirection(page,'neutral');
+    await wait(()=>stopPosts(f).length===1,'rotar con movimiento no solicitó DETENER');
+    await joystickReady(page);
+    const rotated=await page.locator('#joystick').boundingBox();
+    assert(rotated,'joystick fuera del viewport tras rotar');
+    const moved={id:origin.id,x:rotated.x+rotated.width*.8,y:rotated.y+rotated.height/2};
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[moved]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await joystickDirection(page,'neutral');
+    assert.equal(motionPosts(f).length,1,'el puntero se rearmó tras rotar');
+    assert.equal(stopPosts(f).length,1,'el giro produjo DETENER duplicado');
+    await page.waitForFunction(()=>{
+      const pad=document.querySelector('#joystick').getBoundingClientRect();
+      const knob=document.querySelector('#joystickStick').getBoundingClientRect();
+      return Math.hypot(pad.x+pad.width/2-knob.x-knob.width/2,pad.y+pad.height/2-knob.y-knob.height/2)<2;
+    });
+    await checkLayout(page,'control');
+    report.scenarios.orientationChange={neutral:true,priorityStop:true,pointerNotRearmed:true};
   }finally{await f.ctx.close();}
 }
 
@@ -564,7 +676,7 @@ async function checkAccessPanel(){
   report.scenarios.accessPanel={tested,stopUncovered:true,closedModeReadOnly:true};
 }
 
-const reps=new Set(['390x844','844x390','1440x900']);
+const reps=new Set(['390x844','844x390','768x1024','1440x900']);
 try{
   const layoutErrors=[];
   for(const [width,height] of viewports){
@@ -607,6 +719,7 @@ try{
   await checkDirectionalPointer();
   await checkDirectionalKeyboard();
   await checkDirectionalTouch();
+  await checkOrientationChange();
   await checkMovementDisconnect();
   await checkDemoObservation();
   await checkAccessPanel();

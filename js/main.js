@@ -1,13 +1,13 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
 import {ApiClient} from './api.js';
 import {VehicleSocket} from './socket.js';
-import {ControlSession} from './control.js?v=2';
+import {ControlSession} from './control.js?v=3';
 import {DIRECTIONS,validCommands,commandByName} from './catalog.js';
 import {isDiagonal} from './directions.js';
-import {initJoystick} from './joystick.js?v=2';
+import {initJoystick} from './joystick.js?v=3';
 import {initNavigation} from './navigation.js?v=2';
 import {MonitorSession} from './monitor.js';
-import * as ui from './ui.js?v=2';
+import * as ui from './ui.js?v=3';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
@@ -242,16 +242,13 @@ joystick=initJoystick(direction=>{
 },{
   isEnabled:canDrive,
   isPreviewEnabled:()=>navigation.view==='control'&&!$('#authDialog').open,
-  diagonalButtons:document.querySelectorAll('[data-preview-direction]'),
   onPreview(direction,{previewOnly}){
     inputPreviewOnly=Boolean(direction)&&previewOnly;
     if(direction&&!previewOnly)preserveCapture=false;
-    const label=directionLabels[direction]||'Neutral';
-    $('#directionStatus').textContent=inputPreviewOnly?`${label} · Vista previa`:label;
-    $('.control-panel').dataset.preview=String(inputPreviewOnly);
-    for(const button of document.querySelectorAll('[data-preview-direction]')){
-      button.dataset.current=String(button.dataset.previewDirection===direction);
-    }
+    ui.displayDirection(directionLabels[direction]||'Neutral',{
+      unsupported:isDiagonal(direction),
+      preview:inputPreviewOnly,
+    });
   },
 });
 document.addEventListener('keydown',event=>{
