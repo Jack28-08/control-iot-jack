@@ -13,6 +13,14 @@ Las marcas iluminadas corresponden al ángulo y el ámbar distingue una
 selección sin envío. Un cambio de orientación invalida el puntero activo:
 si el gesto había enviado una orden, solicita DETENER una vez.
 
+La [rama de banco](https://github.com/Jack28-08/control-iot-jack/tree/codex/firmware-diagonal-banco/firmware/directional-bench)
+incluye un módulo C++11 para aplicar una máscara de los dos ejes en un
+solo latch, revocar concesiones y volver a neutral por vencimiento. Los
+seis escenarios con salidas simuladas pasaron en Windows. El módulo y
+las pruebas también compilaron con GCC para ESP8266. Sigue pendiente
+integrar el transporte autenticado y validar las salidas y el mando en
+banco con el vehículo.
+
 ## Firmware localizado
 
 Se encontraron dos copias idénticas del sketch de banco,
