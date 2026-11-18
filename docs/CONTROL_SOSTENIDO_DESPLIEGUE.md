@@ -1,5 +1,9 @@
 # Control sostenido y diagnóstico de NODE/01
 
+Este documento conserva el diagnóstico y los pasos de la primera candidata
+simulada. Tras recuperar el firmware, la revisión integrada usa su propia
+[guía de instalación y comprobación](CONTROL_INTEGRADO_INSTALACION.md).
+
 ## Qué muestran los datos
 
 | Lectura reportada | Alcance |
