@@ -1,13 +1,14 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
-import {ApiClient} from './api.js';
+import {ApiClient} from './api.js?v=4';
 import {VehicleSocket} from './socket.js';
-import {ControlSession} from './control.js?v=3';
+import {ControlSession} from './control.js?v=4';
 import {DIRECTIONS,validCommands,commandByName} from './catalog.js';
 import {isDiagonal} from './directions.js';
-import {initJoystick} from './joystick.js?v=3';
+import {SustainedControl} from './sustained.js';
+import {initJoystick} from './joystick.js?v=4';
 import {initNavigation} from './navigation.js?v=2';
 import {MonitorSession} from './monitor.js';
-import * as ui from './ui.js?v=3';
+import * as ui from './ui.js?v=4';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
@@ -20,6 +21,24 @@ let preserveCapture=false;
 const directionLabels={up:'Avanzar',right:'Girar a la derecha',down:'Retroceder',left:'Girar a la izquierda',
   'up-right':'Avanzar a la derecha','up-left':'Avanzar a la izquierda',
   'down-right':'Retroceder a la derecha','down-left':'Retroceder a la izquierda'};
+const sustained=new SustainedControl(api,{
+  change:refreshControls,
+  accepted(direction,sample){
+    ui.displayMovement(directionLabels[direction]);
+    ui.setOperation(`${directionLabels[direction]} · permiso aceptado`,
+      `La orden lógica respondió en ${sample.milliseconds} ms. La respuesta no confirma las salidas del dispositivo.`);
+  },
+  released(sample){
+    ui.displayMovement('Neutral');
+    ui.setOperation('Permiso liberado',`El servidor confirmó la revocación en ${sample.milliseconds} ms. El dispositivo conserva su plazo automático.`);
+  },
+  failed(sample){
+    manualActive=false;gestureRequested=false;preserveCapture=false;joystick?.neutral();
+    ui.displayMovement('Sin confirmar');
+    ui.setOperation('Control sostenido interrumpido',
+      `Sin confirmación de ${sample.action} (${sample.milliseconds} ms). Revisa el enlace y usa DETENER si corresponde.`);
+  },
+});
 const control=new ControlSession(api,{
   change:refreshControls,operation:ui.setOperation,movement:ui.displayMovement,
   canDispatch:canDrive,
@@ -41,8 +60,9 @@ const navigation=initNavigation(view=>{
 $('#monitorRefresh')?.addEventListener('click',()=>void monitor.refresh());
 
 function accessChanged(){
-  ui.setAccessLabel(api.hasKey,api.evaluationStatus);
+  if(sustained.active&&!api.hasKey)void sustained.release();
   if(!api.hasAccess&&manualActive){
+    if(sustained.active)void sustained.release();
     manualActive=false;gestureRequested=false;control.interruptManual();
   }
   refreshControls();
@@ -53,17 +73,19 @@ function accessChanged(){
     const delay=Math.min(remaining,Math.max(1000,remaining-Math.min(15000,remaining/3)));
     renewalTimer=setTimeout(()=>{
       if(api.hasEvaluation)void api.evaluation({force:true});
-      else{api.clearEvaluation();ui.setAccessLabel(api.hasKey,'closed');}
+      else api.clearEvaluation();
     },delay);
   }
 }
 function canDrive(){
-  return api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
+  return api.hasAccess&&navigator.onLine&&!awaitingConnection&&!sustained.releasing&&!$('#authDialog').open&&control.canMove();
 }
+function canJoystick(){return canDrive()&&(sustained.mode==='legacy'||(api.hasKey&&sustained.ready&&!state.movementBusy));}
 function refreshControls(){
-  ui.lockCommands(!canDrive());
+  ui.setAccessLabel(api.hasKey,api.evaluationStatus,{operatorForJoystick:sustained.mode==='managed'});
+  ui.lockCommands(!canDrive()||sustained.active);
   ui.markCommandState(state.lastRequested,state.movementPhase,state.pending);
-  ui.setDemoButtons({canStart:canDrive()&&control.canStart(),
+  ui.setDemoButtons({canStart:canDrive()&&!sustained.active&&control.canStart(),
     canCancel:api.hasAccess&&(state.demoActive||state.uncertain)&&!state.demoBusy&&!state.stopBusy&&Boolean(state.activeDemoId),
     selectionDisabled:state.demoBusy||state.demoActive||state.uncertain||state.stopBusy});
   ui.setDemoState(state.uncertain&&(state.demoActive||state.demoBusy)?'Observación incierta':state.demoStatus);
@@ -75,16 +97,18 @@ function authorized(){
   ui.notify(message);return false;
 }
 function opError(prefix,error){ui.setOperation(`${prefix} · sin confirmación`,error.message);ui.notify(error.message);}
-function stopManual({preserveInput=false}={}){
+function stopManual({preserveInput=false,global=false}={}){
   manualActive=false;gestureRequested=false;
   preserveCapture=preserveInput;
   if(!preserveInput)joystick?.neutral();
-  if(api.hasAccess)void control.stop({preserveInput});
+  if(!global&&sustained.active){void sustained.release();return;}
+  sustained.invalidate();
+  if(api.hasAccess)void control.stop({preserveInput}).finally(()=>sustained.refresh());
   else control.interruptManual();
 }
 function requestStop(){
   joystick?.neutral();
-  if(authorized())stopManual();
+  if(authorized())stopManual({global:true});
 }
 function onConnectionLost(){
   if(!manualActive)return;
@@ -117,12 +141,21 @@ const socket=new VehicleSocket(value=>{
   monitor.connection(value);
   if(value==='En línea'){
     awaitingConnection=false;
-    control.connected();refreshControls();
+    control.connected();refreshControls();void sustained.refresh();
   }else if(value==='Desconectado'){
     control.disconnected();onConnectionLost();refreshControls();
   }
 },event=>{
+  const activeLease=sustained.active;
+  if(event.tipo==='detencion_logica'){
+    const managed=sustained.mode==='managed';
+    sustained.invalidate();
+    if(managed)void sustained.refresh();
+  }
   control.event(event);
+  if(activeLease&&sustained.active&&state.demoActive&&state.execution===event.id_ejecucion){
+    void sustained.release();
+  }
   monitor.event(event);
   if(['demo_inicio','demo_movimiento'].includes(event.tipo)&&state.demoActive&&state.activeDemoId!==state.selectedDemo){
     // Una DEMO de otro cliente también debe mostrar su propio plan consultado por GET.
@@ -134,11 +167,13 @@ const socket=new VehicleSocket(value=>{
 async function checkHealth(){
   if(healthBusy)return;
   healthBusy=true;ui.setIndicator('api','Comprobando','wait');
+  const start=performance.now();
   try{
     const result=await api.health();
     if(result?.status!=='ok')throw Error('Salud sin estado concluyente.');
-    $('#apiStatus').removeAttribute('title');
+    $('#apiStatus').title=`Salud HTTPS en ${Math.round(performance.now()-start)} ms`;
     apiAvailable=true;ui.setIndicator('api','Disponible','ok');
+    if(!state.stopBusy)void sustained.refresh();
     if(!catalogLoaded)void loadCatalog();
   }catch(error){
     apiAvailable=false;ui.setIndicator('api','No disponible','error');
@@ -175,7 +210,7 @@ async function loadCatalog(){
       ui.notify('No pudimos verificar los movimientos. Puedes intentar actualizar la conexión.');
     }
     ui.renderCommands(state.commands,cmd=>{
-      if(!canDrive())return;
+      if(!canDrive()||sustained.active)return;
       if(Object.values(DIRECTIONS).some(direction=>commandByName(state.commands,direction)===cmd)){
         manualActive=true;preserveCapture=false;
       }
@@ -211,6 +246,7 @@ $('#saveKeyButton').addEventListener('click',()=>{
   ui.setOperation('Acceso actualizado',api.hasKey?'Clave sólo en memoria de esta página.':'No se ingresó ninguna clave.');
 });
 $('#clearKeyButton').addEventListener('click',()=>{
+  if(sustained.active)stopManual();
   api.clearKey();$('#keyInput').value='';$('#authDialog').close();
   ui.setOperation('Acceso borrado','La clave se eliminó de la memoria de esta página.');
 });
@@ -220,10 +256,22 @@ for(const button of ['#stopButton','#stopDemoButton']){
   $(button).addEventListener('click',requestStop);
 }
 $('#demoSelect').addEventListener('change',()=>void selectDemo());
-$('#startDemoButton').addEventListener('click',()=>{if(canDrive()&&control.canStart())void control.start();});
+$('#startDemoButton').addEventListener('click',()=>{if(canDrive()&&!sustained.active&&control.canStart())void control.start();});
 $('#cancelDemoButton').addEventListener('click',()=>{if(authorized())void control.cancel();});
 $('#retryConnectionButton').addEventListener('click',()=>void retry());
 joystick=initJoystick(direction=>{
+  if(sustained.mode!=='legacy'){
+    if(isDiagonal(direction)&&!sustained.diagonals){
+      if(sustained.active)stopManual({preserveInput:true});
+      return;
+    }
+    if(canJoystick()&&sustained.direction(direction)){
+      gestureRequested=true;manualActive=true;preserveCapture=false;
+    }else if(!sustained.ready&&api.hasAccess){
+      ui.notify('No hay permiso direccional disponible. Comprueba el enlace del dispositivo.');
+    }
+    return;
+  }
   if(isDiagonal(direction)){
     if(gestureRequested||manualActive)stopManual({preserveInput:true});
     return;
@@ -240,13 +288,15 @@ joystick=initJoystick(direction=>{
   if(gestureRequested)stopManual({preserveInput:held});
   else if(!held)preserveCapture=false;
 },{
-  isEnabled:canDrive,
+  isEnabled:canJoystick,
+  canContinueChord:()=>sustained.active&&sustained.diagonals&&canJoystick(),
   isPreviewEnabled:()=>navigation.view==='control'&&!$('#authDialog').open,
   onPreview(direction,{previewOnly}){
-    inputPreviewOnly=Boolean(direction)&&previewOnly;
+    const supportedDiagonal=isDiagonal(direction)&&sustained.diagonals&&canJoystick();
+    inputPreviewOnly=Boolean(direction)&&previewOnly&&!supportedDiagonal;
     if(direction&&!previewOnly)preserveCapture=false;
     ui.displayDirection(directionLabels[direction]||'Neutral',{
-      unsupported:isDiagonal(direction),
+      unsupported:isDiagonal(direction)&&!sustained.diagonals,
       preview:inputPreviewOnly,
     });
   },
@@ -258,7 +308,6 @@ document.addEventListener('keydown',event=>{
   }
 });
 
-ui.setAccessLabel(api.hasKey,api.evaluationStatus);
 refreshControls();socket.start();void api.evaluation();
 void checkHealth();void checkRds();
 setInterval(()=>void checkHealth(),API_CHECK_MS);

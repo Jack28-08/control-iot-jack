@@ -6,21 +6,33 @@ export class ControlSession {
     this.state={commands:[],selectedDemo:null,stepsReady:false,demoActive:false,demoBusy:false,
       movementBusy:false,stopBusy:false,pending:null,lastRequested:null,activeDemoId:null,
       execution:null,lastOrder:0,uncertain:false,movementPhase:'idle',demoStatus:'En espera'};
-    this.epoch=0;this.demoRevision=0;this.finished=new Set();this.activeController=null;this.observing=false;this.observationRevision=0;
+    this.epoch=0;this.demoRevision=0;this.finished=new Set();this.activeController=null;
+    this.demoStartController=null;this.observing=false;this.observationRevision=0;
   }
   changed(){this.view.change(this.state);}
   canMove(){const s=this.state;return Boolean(s.commands.length&&!s.demoActive&&!s.demoBusy&&!s.stopBusy&&!s.uncertain);}
   canStart(){const s=this.state;return this.canMove()&&!s.movementBusy&&s.stepsReady&&Boolean(s.selectedDemo);}
   fail(label,error){this.view.operation(`${label} · sin confirmación`,error.message);}
+  invalidateMovement(reason){
+    const controller=this.activeController;
+    // Una promesa abortada puede seguir viva. Desvincularla antes de abortar
+    // deja que un gesto posterior sea dueño de su propia cola y de su estado.
+    this.activeController=null;
+    this.state.movementBusy=false;
+    this.state.pending=null;
+    controller?.abort(reason);
+  }
   async move(command){
     const s=this.state;
-    if(!this.canMove()||!s.commands.includes(command))return;
+    if(!this.canMove()||!s.commands.includes(command)||!this.view.canDispatch())return;
     if(s.movementBusy){s.pending=s.lastRequested?.id_comando===command.id_comando?null:command;this.changed();return;}
     const epoch=this.epoch, controller=new AbortController();
     this.activeController=controller;s.movementBusy=true;s.pending=null;
     s.lastRequested={...command,when:Date.now(),epoch};s.movementPhase='sending';this.changed();
-    this.view.movement(command.nombre);this.view.operation(`${command.nombre} · solicitado`,'Enviando por REST a AWS.');
     try{
+      if(this.activeController!==controller)return;
+      this.view.movement(command.nombre);
+      this.view.operation(`${command.nombre} · solicitado`,'Enviando por REST a AWS.');
       const result=await this.api.move(command.id_comando,controller.signal);
       if(epoch!==this.epoch)return;
       if(result?.id_comando!==command.id_comando)throw Error('La respuesta no corresponde al comando solicitado.');
@@ -34,18 +46,26 @@ export class ControlSession {
       else{s.movementPhase='error';this.fail(command.nombre,error);}
     }}
     finally{
-      if(this.activeController===controller)this.activeController=null;
-      s.movementBusy=false;
-      const next=s.pending;s.pending=null;this.changed();
-      if(next&&epoch===this.epoch&&this.canMove()&&this.view.canDispatch())void this.move(next);
+      if(this.activeController===controller){
+        this.activeController=null;
+        s.movementBusy=false;
+        const next=s.pending;s.pending=null;this.changed();
+        if(next&&epoch===this.epoch&&this.canMove()&&this.view.canDispatch())void this.move(next);
+      }
     }
   }
   async stop({preserveInput=false}={}){
-    const s=this.state;if(s.stopBusy)return;
+    const s=this.state;
+    if(s.stopBusy){
+      if(!preserveInput)this.view.neutral();
+      return;
+    }
     const epoch=++this.epoch;
-    s.stopBusy=true;s.pending=null;s.movementPhase='idle';
+    s.stopBusy=true;s.movementPhase='idle';
+    this.invalidateMovement('priority_stop');
+    this.demoStartController?.abort('priority_stop');
     if(!preserveInput)this.view.neutral();
-    this.activeController?.abort('priority_stop');this.changed();
+    this.changed();
     this.view.movement('DETENIENDO');
     this.view.operation('DETENER · solicitado','Prioridad local. Abortar un fetch no revierte una orden ya recibida por AWS.');
     try{
@@ -61,12 +81,15 @@ export class ControlSession {
     finally{s.stopBusy=false;this.changed();}
   }
   async start(){
-    if(!this.canStart())return;
+    if(!this.canStart()||!this.view.canDispatch())return;
     const s=this.state, id=s.selectedDemo, epoch=this.epoch, revision=this.demoRevision,observation=this.observationRevision;
+    const controller=new AbortController();
+    this.demoStartController=controller;
     s.demoBusy=true;s.activeDemoId=id;s.lastOrder=0;s.demoStatus='Iniciando';this.view.neutral();this.changed();
-    this.view.operation('DEMO · inicio solicitado','Esperando HTTP 202; la secuencia se ejecuta en AWS.');
     try{
-      const result=await this.api.startDemo(id);
+      if(controller.signal.aborted)return;
+      this.view.operation('DEMO · inicio solicitado','Esperando HTTP 202; la secuencia se ejecuta en AWS.');
+      const result=await this.api.startDemo(id,controller.signal);
       if(epoch!==this.epoch)return;
       if(result?.id_demo!==id||typeof result.id_ejecucion!=='string')throw Error('Respuesta DEMO inesperada.');
       if(revision!==this.demoRevision||this.finished.has(result.id_ejecucion))return;
@@ -75,7 +98,10 @@ export class ControlSession {
       this.view.operation('DEMO · aceptada por API con HTTP 202','Los eventos WSS permiten observar el orden; no prueban movimiento físico.');
     }catch(error){
       if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;s.demoStatus='Inicio sin confirmar';this.fail('DEMO',error);}
-    }finally{s.demoBusy=false;this.changed();}
+    }finally{
+      this.demoStartController=null;
+      s.demoBusy=false;this.changed();
+    }
   }
   async cancel(){
     const s=this.state;
@@ -112,7 +138,7 @@ export class ControlSession {
       const newExecution=s.execution!==event.id_ejecucion;
       s.execution=event.id_ejecucion;s.activeDemoId=event.id_demo;
       if(type==='demo_inicio'||type==='demo_movimiento'){
-        if(newExecution){s.lastOrder=0;if(s.movementBusy){this.epoch++;this.activeController?.abort('demo_started');}}
+        if(newExecution){s.lastOrder=0;if(s.movementBusy){this.epoch++;this.invalidateMovement('demo_started');}}
         if(type==='demo_movimiento'){
           if(!Number.isInteger(event.orden)||event.orden<=s.lastOrder)return;
           s.lastOrder=event.orden;this.view.step(event.orden);
@@ -128,7 +154,9 @@ export class ControlSession {
         this.view.operation(`Evento WSS · ${type}`,'AWS notificó el cierre de esta ejecución. No certifica actuación física.');
       }
     }else if(type==='detencion_logica'){
-      this.epoch++;this.demoRevision++;s.pending=null;s.movementPhase='idle';this.activeController?.abort('remote_stop');
+      this.epoch++;this.demoRevision++;s.movementPhase='idle';
+      this.invalidateMovement('remote_stop');
+      this.demoStartController?.abort('remote_stop');
       if(s.execution)this.finished.add(s.execution);
       if(event.id_ejecucion)this.finished.add(event.id_ejecucion);
       s.execution=null;s.demoActive=false;s.uncertain=false;this.view.neutral({preservePreview:true});this.view.step(-1);this.view.movement('NEUTRAL');
@@ -144,10 +172,9 @@ export class ControlSession {
   }
   interruptManual(){
     this.epoch++;
-    this.state.pending=null;
     this.state.uncertain=true;
     this.state.movementPhase='error';
-    this.activeController?.abort('connection_lost');
+    this.invalidateMovement('connection_lost');
     this.view.neutral();
     this.view.operation('Movimiento sin confirmar','Recupera el acceso y solicita DETENER para confirmar la detención lógica.');
     this.changed();

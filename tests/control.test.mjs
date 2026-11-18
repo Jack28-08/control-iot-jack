@@ -46,6 +46,35 @@ test('STOP sale inmediatamente, aborta movimiento y descarta dirección pendient
   assert.equal(h.operations.at(-1)[0],lastOperation);
 });
 
+for(const trigger of ['REST','WSS'])test(`DETENER por ${trigger} separa una petición anterior de la próxima cola`,async()=>{
+  const h=setup();
+  const previous=h.session.move(h.commands[0]);
+  await h.session.move(h.commands[1]);
+  if(trigger==='REST'){
+    const stopped=h.session.stop();
+    h.calls.stop[0].resolve({detencion_logica:true});
+    await stopped;
+  }else h.session.event(event('detencion_logica'));
+  assert.equal(h.calls.move[0].args[1].aborted,true);
+  assert.equal(h.session.state.movementBusy,false);
+  assert.equal(h.session.state.pending,null);
+
+  const fresh=h.session.move(h.commands[2]);
+  await h.session.move(h.commands[0]);
+  assert.deepEqual(h.calls.move.map(call=>call.args[0]),[42,126]);
+  h.calls.move[0].resolve({id_comando:42});
+  await previous; // El doble ignora el aborto y responde durante la petición nueva.
+  assert.equal(h.session.state.movementBusy,true);
+  assert.equal(h.session.state.pending,h.commands[0]);
+  assert.equal(h.movements.at(-1),'GIRAR_DERECHA');
+  h.calls.move[1].resolve({id_comando:126});
+  await fresh;
+  assert.deepEqual(h.calls.move.map(call=>call.args[0]),[42,126,42]);
+  h.calls.move[2].resolve({id_comando:42});
+  await Promise.resolve();
+  assert.equal(h.session.state.movementBusy,false);
+});
+
 test('DETENER durante la transición de sector permite mantener la captura local',async()=>{
   const h=setup();
   const neutral=[];
@@ -62,6 +91,18 @@ test('DETENER durante la transición de sector permite mantener la captura local
   assert.equal(h.movements.at(-1),'NEUTRAL');
 });
 
+test('DETENER explícito neutraliza la captura aunque una detención previa siga en vuelo',async()=>{
+  const h=setup();
+  let neutralized=0;
+  h.session.view.neutral=()=>neutralized++;
+  const stopping=h.session.stop({preserveInput:true});
+  await h.session.stop();
+  assert.equal(neutralized,1);
+  assert.equal(h.calls.stop.length,1);
+  h.calls.stop[0].resolve({detencion_logica:true});
+  await stopping;
+});
+
 test('revocar el despacho evita reactivar el control con una dirección pendiente',async()=>{
   const h=setup();
   const running=h.session.move(h.commands[0]);
@@ -70,6 +111,15 @@ test('revocar el despacho evita reactivar el control con una dirección pendient
   h.calls.move[0].resolve({id_comando:42});await running;
   assert.equal(h.calls.move.length,1);
   assert.equal(h.session.state.pending,null);
+});
+
+test('un control sin permiso de despacho no inicia un movimiento ni una DEMO',async()=>{
+  const h=setup();
+  h.session.view.canDispatch=()=>false;
+  await h.session.move(h.commands[0]);
+  await h.session.start();
+  assert.equal(h.calls.move.length,0);
+  assert.equal(h.calls.startDemo.length,0);
 });
 
 test('perder acceso invalida el movimiento pendiente y requiere confirmar detención',async()=>{
@@ -126,6 +176,7 @@ test('DEMO no inicia sin pasos cargados ni durante un movimiento en curso',async
 test('respuesta de inicio DEMO posterior a STOP no vuelve a activar la ejecución',async()=>{
   const h=setup();h.session.connected();const starting=h.session.start();
   const stopping=h.session.stop();
+  assert.equal(h.calls.startDemo[0].args[1].aborted,true);
   h.calls.stop[0].resolve({detencion_logica:true});await stopping;
   h.calls.startDemo[0].resolve(accepted());await starting;
   assert.equal(h.session.state.demoActive,false);assert.equal(h.session.state.execution,null);

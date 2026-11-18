@@ -47,7 +47,7 @@ const errors=[];
 const wait=async(fn,msg)=>{for(let i=0;i<120;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50));}throw Error(msg);};
 const label=async(page,selector,value)=>wait(async()=>String(await page.locator(selector).textContent()).includes(value),selector+' no muestra '+value);
 
-async function scenario(width,height){
+async function scenario(width,height,{managed=false}={}){
   const handheld=width<600||height<500;
   const ctx=await browser.newContext({viewport:{width,height},hasTouch:handheld,isMobile:handheld,serviceWorkers:'block'});
   const page=await ctx.newPage();
@@ -62,6 +62,7 @@ async function scenario(width,height){
     socketsOpened:0,heldMove:null,holdMove:false,holdState:false,heldState:null,
     holdHistory:false,heldHistory:null,holdStop:false,heldStop:null,
     keepSocketClosed:false,demoStepOnStart:true,
+    managed,barrier:1,sustained:[],holdPermit:false,heldPermit:null,
   };
   const put=(id,c)=>({id_vehiculo:1,vehiculo:'Vehículo IoT',id_comando:c.id_comando,comando:c.nombre,codigo:c.codigo,fecha_actualizacion:stamp(id).slice(0,-1),conectado:false});
   f.state=put(f.id,commands[0]);
@@ -110,6 +111,10 @@ async function scenario(width,height){
     if(method==='OPTIONS'){await send(204,null);return;}
     const vehicle={id_vehiculo:1,nombre:'Vehículo IoT',activo:true};
     if(method==='GET'){
+      if(f.managed&&path==='/vehiculos/1/control/capacidad'){
+        await send(200,{habilitado:true,disponible:true,diagonales:true,barrera:String(f.barrier),ttl_ms:750,renovar_ms:200});
+        return;
+      }
       if(path==='/evaluacion/vehiculos/1'){f.authHits++;await send(f.authorized?200:403,f.authorized?{token:fixtureBearer,expires_at:new Date(Date.now()+600000).toISOString()}:{detail:'cerrado'});return;}
       if(path==='/health'||path==='/health/db'){const status=path==='/health'?f.status.health:f.status.rds;await send(status,status===200?{status:'ok'}:{status:'unavailable'});return;}
       if(path==='/vehiculos/1'){await send(200,vehicle);return;}
@@ -130,10 +135,25 @@ async function scenario(width,height){
       }
     }
     if(method==='POST'){
-      const valid=f.authorized&&headers.authorization==='Bearer '+fixtureBearer&&!headers['x-api-key'];
+      const valid=f.authorized&&(f.managed&&path.startsWith('/vehiculos/1/control/')
+        ?headers['x-api-key']==='operador-local-de-prueba'
+        :headers.authorization==='Bearer '+fixtureBearer&&!headers['x-api-key']);
       const body=req.postDataJSON();
       f.posts.push({path,authorized:valid,id:body?.id_comando??null});
       if(!valid){await send(401,{detail:'sin acceso'});return;}
+      if(f.managed&&path.startsWith('/vehiculos/1/control/')){
+        const action=path.split('/').at(-1);
+        f.sustained.push({action,...body});
+        if(action==='liberar'){
+          ++f.barrier;await send(200,{liberado:true,barrera:String(f.barrier)});return;
+        }
+        if(body.barrera!==String(f.barrier)){await send(409,{});return;}
+        if(action==='permiso'&&f.holdPermit){
+          await new Promise(resolve=>{f.heldPermit=resolve;});
+        }
+        await send(200,{barrera:body.barrera,gesto:body.gesto,secuencia:body.secuencia,ttl_ms:750}).catch(()=>{});
+        return;
+      }
       if(path==='/vehiculos/1/movimientos'){
         const c=commands.find(c=>c.id_comando===body?.id_comando);
         if(!c){await send(422,{detail:'id inválido'});return;}
@@ -149,6 +169,7 @@ async function scenario(width,height){
       }
       if(path.endsWith('/cancelar')){f.send('demo_cancelada',{...execution,fecha_hora:stamp(++f.id)});await send(200,{...execution,estado:'cancelada'});return;}
       if(path.endsWith('/detener')){
+        if(f.managed)++f.barrier;
         if(f.holdStop){f.holdStop=false;await new Promise(ok=>{f.heldStop=ok;});}
         f.send('detencion_logica',{fecha_hora:stamp(++f.id)});
         await send(200,{id_vehiculo:1,id_ejecucion:null,detencion_logica:true,estado:'detenida_logicamente'});return;
@@ -676,8 +697,48 @@ async function checkAccessPanel(){
   report.scenarios.accessPanel={tested,stopUncovered:true,closedModeReadOnly:true};
 }
 
+async function checkSustainedPointer(){
+  const f=await scenario(844,390,{managed:true});
+  try{
+    const {page}=f;
+    await wait(()=>f.routes.some(r=>r.path.endsWith('/control/capacidad')),'capacidad no consultada');
+    await label(page,'#controlAvailability','Joystick sostenido requiere clave');
+    await page.locator('#credentialsButton').click();
+    await page.locator('#keyInput').fill('operador-local-de-prueba');
+    await page.locator('#saveKeyButton').click();
+    const pad=await page.locator('#joystick').boundingBox();
+    const x=pad.x+pad.width/2,y=pad.y+pad.height/2;
+    await page.locator('#joystick').focus();
+    f.holdPermit=true;
+    await page.mouse.move(x,y);
+    await page.mouse.down();
+    await page.mouse.move(x,y-pad.height*.35);
+    await wait(()=>Boolean(f.heldPermit),'no hay permiso pendiente');
+    await page.mouse.up();
+    await wait(()=>f.sustained.some(r=>r.action==='liberar'),'pointerup no revocó el permiso');
+    f.heldPermit();f.holdPermit=false;
+    await wait(()=>f.routes.filter(r=>r.path.endsWith('/control/capacidad')).length>=2,'barrera no refrescada');
+    assert.equal(f.sustained.filter(r=>r.action==='vector').length,0,'un permiso tardío generó movimiento');
+
+    await page.mouse.move(x,y);
+    await page.mouse.down();
+    await page.mouse.move(x+pad.width*.27,y-pad.height*.27);
+    await wait(()=>f.sustained.filter(r=>r.action==='vector').length>=2,'no se renovó dirección sostenida');
+    assert(f.sustained.filter(r=>r.action==='vector').every(r=>r.longitudinal===1&&r.lateral===1));
+    await page.locator('#joystick').dispatchEvent('pointercancel',{pointerId:1,pointerType:'mouse'});
+    await wait(()=>f.sustained.filter(r=>r.action==='liberar').length===2,'pointercancel no revocó el gesto');
+    await page.mouse.up();
+    const count=f.sustained.length;
+    await page.waitForTimeout(250);
+    assert.equal(f.sustained.length,count,'la renovación sobrevivió a pointercancel');
+    assert.equal(motionPosts(f).length,0,'la diagonal generó un movimiento individual');
+    report.scenarios.sustainedPointer={latePermitFenced:true,renewed:true,cancelled:true};
+  }finally{await f.ctx.close();}
+}
+
 const reps=new Set(['390x844','844x390','768x1024','1440x900']);
 try{
+  await checkSustainedPointer();
   const layoutErrors=[];
   for(const [width,height] of viewports){
     const tag=width+'x'+height;

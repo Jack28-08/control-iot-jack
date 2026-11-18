@@ -19,7 +19,7 @@ class Element extends EventTarget {
     this.dispatchEvent(event('lostpointercapture',{pointerId:id}));
   }
 }
-function setup(t,{onDirection,onPreview,chordDelay=0,initialEnabled=true,alwaysPreview=false}={}){
+function setup(t,{onDirection,onPreview,canContinueChord,chordDelay=0,initialEnabled=true,alwaysPreview=false}={}){
   const oldDocument=globalThis.document,oldWindow=globalThis.window;
   const el=new Element(),knob=new Element(),win=new EventTarget(),doc=new EventTarget();
   win.innerWidth=360;win.innerHeight=640;
@@ -29,7 +29,7 @@ function setup(t,{onDirection,onPreview,chordDelay=0,initialEnabled=true,alwaysP
   const directions=[], releases=[], previews=[];
   let enabled=initialEnabled;
   const joystick=initJoystick(d=>{directions.push(d);return onDirection?.(d);},meta=>releases.push(meta),{
-    chordDelay,isEnabled:()=>enabled,isPreviewEnabled:()=>alwaysPreview||enabled,
+    chordDelay,canContinueChord,isEnabled:()=>enabled,isPreviewEnabled:()=>alwaysPreview||enabled,
     onPreview:(direction,meta)=>{previews.push({direction,...meta});onPreview?.(direction);},
   });
   t.after(()=>joystick.destroy());
@@ -120,11 +120,12 @@ test('teclado combina dos flechas, ignora repetición y sólo previsualiza liber
   assert.equal(h.previews[2].previewOnly,true);
 });
 
-for(const kind of ['element-blur','window-blur','hidden','Escape',' '])test(`abandono ${kind} neutraliza teclado`,t=>{
+for(const kind of ['element-blur','window-blur','pagehide','hidden','Escape',' '])test(`abandono ${kind} neutraliza teclado`,t=>{
   const h=setup(t);
   h.key('keydown','ArrowUp');
   if(kind==='element-blur')h.el.dispatchEvent(event('blur'));
   else if(kind==='window-blur')h.win.dispatchEvent(event('blur'));
+  else if(kind==='pagehide')h.win.dispatchEvent(event('pagehide'));
   else if(kind==='hidden'){h.doc.hidden=true;h.doc.dispatchEvent(event('visibilitychange'));}
   else h.key('keydown',kind);
   h.key('keyup','ArrowUp');
@@ -182,6 +183,34 @@ test('dos flechas próximas no despachan la cardinal previa ni la restante al li
   assert.deepEqual(h.directions,['up-left']);
   h.key('keyup','ArrowLeft');
   assert.equal(h.joystick.direction,null);
+});
+
+test('liberar un eje de la diagonal continua actualiza la cardinal restante inmediatamente',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const h=setup(t,{chordDelay:65,canContinueChord:()=>true});
+  h.key('keydown','ArrowUp');
+  h.key('keydown','ArrowRight');
+  assert.deepEqual(h.directions,['up-right']);
+  h.key('keyup','ArrowUp');
+  assert.deepEqual(h.directions,['up-right','right']);
+  assert.equal(h.previews.at(-1).previewOnly,false);
+  h.key('keyup','ArrowRight');
+  t.mock.timers.tick(100);
+  assert.equal(h.joystick.direction,null);
+  assert.equal(h.releases,1);
+  assert.deepEqual(h.directions,['up-right','right']);
+});
+
+test('revocar la diagonal continua conserva sólo el indicador al soltar parte del acorde',t=>{
+  let canContinue=true;
+  const h=setup(t,{canContinueChord:()=>canContinue});
+  h.key('keydown','ArrowUp');
+  h.key('keydown','ArrowRight');
+  canContinue=false;
+  h.key('keyup','ArrowUp');
+  assert.equal(h.joystick.direction,'right');
+  assert.equal(h.previews.at(-1).previewOnly,true);
+  assert.deepEqual(h.directions,['up','up-right']);
 });
 
 test('al mantener una sola flecha sale una cardinal, y cancelar antes no envía nada',t=>{

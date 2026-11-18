@@ -41,20 +41,22 @@ export function notify(message){
   n.textContent=text;n.hidden=false;detail.textContent=text;detail.hidden=false;
   clearTimeout(messageTimer);messageTimer=setTimeout(()=>n.hidden=true,6500);
 }
-export function setAccessLabel(enabled,evaluationStatus='idle'){
+export function setAccessLabel(enabled,evaluationStatus='idle',{operatorForJoystick=false}={}){
   const access=$('#accessState'),button=$('#credentialsButton');
   const active=evaluationStatus==='active';
-  button.hidden=active;
+  button.hidden=active&&!operatorForJoystick;
   button.querySelector('span').textContent=enabled?'Clave activa':'Acceso';
-  access.hidden=!active;
+  access.hidden=!active||operatorForJoystick;
   const unavailable=!active&&!enabled;
   document.querySelector('.actions-panel').dataset.authorized=String(!unavailable);
-  const message=evaluationStatus==='checking'?'Comprobando acceso':'Requiere acceso autorizado';
-  $('#controlAvailability').textContent=unavailable?message:'';
-  $('#controlAvailability').hidden=!unavailable;
+  const message=operatorForJoystick&&!enabled?'Joystick sostenido requiere clave':
+    evaluationStatus==='checking'?'Comprobando acceso':'Requiere acceso autorizado';
+  const showMessage=unavailable||(operatorForJoystick&&!enabled);
+  $('#controlAvailability').textContent=showMessage?message:'';
+  $('#controlAvailability').hidden=!showMessage;
   if(active){
     access.textContent='Evaluación activa';
-    if($('#authDialog').open)$('#authDialog').close();
+    if(!operatorForJoystick&&$('#authDialog').open)$('#authDialog').close();
   }
 }
 export function renderCommands(catalog,onClick){

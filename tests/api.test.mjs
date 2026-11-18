@@ -136,3 +136,21 @@ test('sesiones expiradas o con fecha inválida mantienen la app en lectura',asyn
   assert.equal(await api.evaluation(),false);
   assert.equal(api.hasAccess,false);
 });
+
+test('el acceso de evaluación no se usa para permisos sostenidos de operador',async t=>{
+  const calls=[];
+  fakeFetch(t,async(url,options)=>{
+    calls.push([new URL(url).pathname,options.headers]);
+    return json(url.includes('/evaluacion/')?session():{liberado:true});
+  });
+  const api=new ApiClient();
+  assert(await api.evaluation());
+  await assert.rejects(api.sustainedRequest('liberar',{}),e=>e.code==='operator_required');
+  assert(api.hasEvaluation);
+  assert.equal(calls.length,1);
+  api.setKey('test-operator');
+  await api.sustainedRequest('liberar',{barrera:'test-barrier',gesto:'test-gesture'});
+  assert.equal(calls[1][0],'/vehiculos/1/control/liberar');
+  assert.equal(calls[1][1]['X-API-Key'],'test-operator');
+  assert.equal(calls[1][1].Authorization,undefined);
+});

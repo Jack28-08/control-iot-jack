@@ -6,6 +6,7 @@ const DEFAULT_CHORD_MS = 65;
 export function initJoystick(onDirection, onRelease, {
   isEnabled = () => true,
   isPreviewEnabled = isEnabled,
+  canContinueChord = () => false,
   onPreview = () => {},
   chordDelay = DEFAULT_CHORD_MS,
 } = {}) {
@@ -144,8 +145,11 @@ export function initJoystick(onDirection, onRelease, {
 
   function updateKeys({partial = false} = {}) {
     const next = sectorForKeys(heldKeys);
+    // Sólo una diagonal continua admitida puede conservar un eje al soltar el otro.
+    // Volver de un conflicto o de una diagonal visual no inicia una orden nueva.
+    const continues = partial && next && !isDiagonal(next) && isDiagonal(direction) && canContinueChord();
     moveToSector(next);
-    apply(next, 'keyboard', {previewOnly: partial, defer: true, reason: 'conflict'});
+    apply(next, 'keyboard', {previewOnly: partial && !continues, defer: !partial, reason: 'conflict'});
   }
 
   listen(el, 'pointerdown', startPointer);
@@ -187,6 +191,7 @@ export function initJoystick(onDirection, onRelease, {
   }
 
   listen(window, 'blur', () => neutral({notify: true, reason: 'blur'}));
+  listen(window, 'pagehide', () => neutral({notify: true, reason: 'pagehide'}));
   listen(document, 'visibilitychange', () => {
     if (document.hidden) neutral({notify: true, reason: 'hidden'});
   });

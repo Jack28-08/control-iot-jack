@@ -1,4 +1,4 @@
-import {API_BASE, REQUEST_TIMEOUT_MS, ORIGIN_TAG, VEHICLE_ID, PATHS} from './config.js';
+import {API_BASE, REQUEST_TIMEOUT_MS, ORIGIN_TAG, VEHICLE_ID, PATHS} from './config.js?v=4';
 import {timestamp} from './protocol.js';
 
 export class ApiError extends Error {
@@ -60,7 +60,7 @@ export class ApiClient {
     this.#sessionRequest=load();
     return this.#sessionRequest;
   }
-  async request(path,{method='GET',body=null,authorized=false,signal=null,expectedStatus=null}={}){
+  async request(path,{method='GET',body=null,authorized=false,signal=null,expectedStatus=null,timeoutMs=REQUEST_TIMEOUT_MS,keepalive=false}={}){
     const session=authorized&&!this.hasKey&&this.hasEvaluation?this.#session:null;
     if(authorized&&!this.hasKey&&!session)throw new ApiError('Control no disponible. Comprueba si la evaluación está habilitada.',0,'auth_missing');
     const headers={Accept:'application/json'};
@@ -70,10 +70,10 @@ export class ApiClient {
     const controller=new AbortController();
     const propagate=()=>controller.abort(signal?.reason||'cancelled');
     if(signal?.aborted)propagate(); else signal?.addEventListener('abort',propagate,{once:true});
-    const timeout=setTimeout(()=>controller.abort('timeout'),REQUEST_TIMEOUT_MS);
+    const timeout=setTimeout(()=>controller.abort('timeout'),timeoutMs);
     try {
       const response=await fetch(API_BASE+path,{method,headers,body:body===null?undefined:JSON.stringify(body),
-        signal:controller.signal,cache:'no-store',redirect:'error',credentials:'omit'});
+        signal:controller.signal,cache:'no-store',redirect:'error',credentials:'omit',keepalive});
       if(session&&this.#session===session&&[401,403].includes(response.status)){
         this.#sessionRevision++;this.#sessionRequest=null;
         this.#session=null;this.#evaluationStatus='closed';this.#change();
@@ -105,7 +105,13 @@ export class ApiClient {
   demos(){return this.request(PATHS.demos(VEHICLE_ID));}
   demoSteps(id){return this.request(PATHS.demoSteps(VEHICLE_ID,id));}
   move(id,signal){return this.request(PATHS.movement(VEHICLE_ID),{method:'POST',authorized:true,body:{id_comando:id,origen:ORIGIN_TAG},signal});}
-  startDemo(id){return this.request(PATHS.startDemo(VEHICLE_ID,id),{method:'POST',authorized:true,expectedStatus:202});}
+  startDemo(id,signal){return this.request(PATHS.startDemo(VEHICLE_ID,id),{method:'POST',authorized:true,expectedStatus:202,signal});}
   cancelDemo(id){return this.request(PATHS.cancelDemo(VEHICLE_ID,id),{method:'POST',authorized:true});}
-  stop(){return this.request(PATHS.stop(VEHICLE_ID),{method:'POST',authorized:true});}
+  stop(){return this.request(PATHS.stop(VEHICLE_ID),{method:'POST',authorized:true,keepalive:true});}
+  sustainedCapability(){return this.request(PATHS.sustained(VEHICLE_ID,'capacidad'),{expectedStatus:200,timeoutMs:2500});}
+  sustainedRequest(action,body,signal){
+    if(!this.#key)return Promise.reject(new ApiError('El control sostenido requiere acceso de operador.',0,'operator_required'));
+    return this.request(PATHS.sustained(VEHICLE_ID,action),{method:'POST',authorized:true,body,signal,
+      expectedStatus:200,timeoutMs:1250,keepalive:action==='liberar'});
+  }
 }

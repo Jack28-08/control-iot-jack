@@ -20,5 +20,6 @@ export const PATHS = Object.freeze({
   startDemo: (id,demo) => `/vehiculos/${id}/demos/${demo}/iniciar`,
   cancelDemo: (id,demo) => `/vehiculos/${id}/demos/${demo}/cancelar`,
   stop: id => `/vehiculos/${id}/detener`,
+  sustained: (id, action) => `/vehiculos/${id}/control/${action}`,
   evaluation: id => `/evaluacion/vehiculos/${id}`,
 });
