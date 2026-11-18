@@ -2,7 +2,8 @@
 export class ControlSession {
   constructor(api, view={}) {
     this.api=api;
-    this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},canDispatch:()=>true,...view};
+    this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},
+      canDispatch:()=>true,barrier:()=>null,refreshBarrier(){},...view};
     this.state={commands:[],selectedDemo:null,stepsReady:false,demoActive:false,demoBusy:false,
       movementBusy:false,stopBusy:false,pending:null,lastRequested:null,activeDemoId:null,
       execution:null,lastOrder:0,uncertain:false,movementPhase:'idle',demoStatus:'En espera'};
@@ -33,7 +34,7 @@ export class ControlSession {
       if(this.activeController!==controller)return;
       this.view.movement(command.nombre);
       this.view.operation(`${command.nombre} · solicitado`,'Enviando por REST a AWS.');
-      const result=await this.api.move(command.id_comando,controller.signal);
+      const result=await this.api.move(command.id_comando,controller.signal,this.view.barrier());
       if(epoch!==this.epoch)return;
       if(result?.id_comando!==command.id_comando)throw Error('La respuesta no corresponde al comando solicitado.');
       this.view.confirmed(result);
@@ -42,6 +43,7 @@ export class ControlSession {
         this.view.operation(`${command.nombre} · aceptado por API`,'HTTP confirmado; WSS es independiente y no confirma motores físicos.');
       }
     }catch(error){if(epoch===this.epoch){
+      if(error.status===409)this.view.refreshBarrier();
       if(s.movementPhase==='received')this.view.operation(`${command.nombre} · HTTP sin confirmación; evento WSS recibido`,`${error.message} La coincidencia WSS no identifica de forma única esta solicitud.`);
       else{s.movementPhase='error';this.fail(command.nombre,error);}
     }}
@@ -89,7 +91,7 @@ export class ControlSession {
     try{
       if(controller.signal.aborted)return;
       this.view.operation('DEMO · inicio solicitado','Esperando HTTP 202; la secuencia se ejecuta en AWS.');
-      const result=await this.api.startDemo(id,controller.signal);
+      const result=await this.api.startDemo(id,controller.signal,this.view.barrier());
       if(epoch!==this.epoch)return;
       if(result?.id_demo!==id||typeof result.id_ejecucion!=='string')throw Error('Respuesta DEMO inesperada.');
       if(revision!==this.demoRevision||this.finished.has(result.id_ejecucion))return;
@@ -97,7 +99,14 @@ export class ControlSession {
       s.demoStatus=s.lastOrder>0?'En curso':'Inicio aceptado';
       this.view.operation('DEMO · aceptada por API con HTTP 202','Los eventos WSS permiten observar el orden; no prueban movimiento físico.');
     }catch(error){
-      if(epoch===this.epoch&&revision===this.demoRevision){s.uncertain=true;s.demoStatus='Inicio sin confirmar';this.fail('DEMO',error);}
+      if(epoch===this.epoch&&revision===this.demoRevision){
+        if(error.status===409){
+          s.activeDemoId=null;s.demoStatus='Inicio rechazado';this.view.refreshBarrier();
+        }else{
+          s.uncertain=true;s.demoStatus='Inicio sin confirmar';
+        }
+        this.fail('DEMO',error);
+      }
     }finally{
       this.demoStartController=null;
       s.demoBusy=false;this.changed();

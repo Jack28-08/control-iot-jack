@@ -107,12 +107,12 @@ async function scenario(width,height,{managed=false}={}){
     if(!url.startsWith(api+'/')){await route.abort();return;}
     const path=new URL(url).pathname;
     f.routes.push({method,path});
-    const send=(status,data)=>route.fulfill({status,json:data,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type, x-api-key','access-control-allow-methods':'GET, POST, OPTIONS'}});
+    const send=(status,data)=>route.fulfill({status,json:data,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type, x-api-key, x-iot-barrier','access-control-allow-methods':'GET, POST, OPTIONS'}});
     if(method==='OPTIONS'){await send(204,null);return;}
     const vehicle={id_vehiculo:1,nombre:'Vehículo IoT',activo:true};
     if(method==='GET'){
       if(f.managed&&path==='/vehiculos/1/control/capacidad'){
-        await send(200,{habilitado:true,disponible:true,diagonales:true,barrera:String(f.barrier),ttl_ms:750,renovar_ms:200});
+        await send(200,{habilitado:true,disponible:true,diagonales:true,demo_remota:false,barrera:String(f.barrier),ttl_ms:750,renovar_ms:200});
         return;
       }
       if(path==='/evaluacion/vehiculos/1'){f.authHits++;await send(f.authorized?200:403,f.authorized?{token:fixtureBearer,expires_at:new Date(Date.now()+600000).toISOString()}:{detail:'cerrado'});return;}
@@ -139,13 +139,17 @@ async function scenario(width,height,{managed=false}={}){
         ?headers['x-api-key']==='operador-local-de-prueba'
         :headers.authorization==='Bearer '+fixtureBearer&&!headers['x-api-key']);
       const body=req.postDataJSON();
-      f.posts.push({path,authorized:valid,id:body?.id_comando??null});
+      f.posts.push({path,authorized:valid,id:body?.id_comando??null,barrier:headers['x-iot-barrier']??null});
       if(!valid){await send(401,{detail:'sin acceso'});return;}
+      if(f.managed&&(path.endsWith('/movimientos')||path.endsWith('/iniciar'))&&headers['x-iot-barrier']!==String(f.barrier)){
+        await send(409,{detail:'barrera vencida'});return;
+      }
       if(f.managed&&path.startsWith('/vehiculos/1/control/')){
         const action=path.split('/').at(-1);
         f.sustained.push({action,...body});
         if(action==='liberar'){
-          ++f.barrier;await send(200,{liberado:true,barrera:String(f.barrier)});return;
+          if(body.barrera===String(f.barrier))++f.barrier;
+          await send(200,{liberado:true,barrera:String(f.barrier)});return;
         }
         if(body.barrera!==String(f.barrier)){await send(409,{});return;}
         if(action==='permiso'&&f.holdPermit){
@@ -732,13 +736,63 @@ async function checkSustainedPointer(){
     await page.waitForTimeout(250);
     assert.equal(f.sustained.length,count,'la renovación sobrevivió a pointercancel');
     assert.equal(motionPosts(f).length,0,'la diagonal generó un movimiento individual');
-    report.scenarios.sustainedPointer={latePermitFenced:true,renewed:true,cancelled:true};
+    await joystickReady(page);
+    const stick=page.locator('#joystick');
+    await stick.focus();
+    await page.keyboard.down('ArrowUp');
+    await wait(()=>f.sustained.slice(count).some(r=>r.action==='vector'),'no se inició el gesto posterior');
+    f.send('detencion_logica',{fecha_hora:stamp(++f.id)});
+    await wait(()=>f.sustained.filter(r=>r.action==='liberar').length===3,'el evento tardío no liberó el gesto actual');
+    await page.keyboard.up('ArrowUp');
+    await joystickReady(page);
+    f.keepSocketClosed=true;
+    for(const socket of [...f.sockets])socket.close({code:1012,reason:'cierre simulado en reposo'});
+    await label(page,'#wsStatus','Desconectado');
+    const disconnectedCount=f.posts.length;
+    await stick.focus();
+    await page.keyboard.press('ArrowUp');
+    assert.equal(f.posts.length,disconnectedCount,'una caída en reposo permitió iniciar un gesto');
+    report.scenarios.sustainedPointer={latePermitFenced:true,renewed:true,cancelled:true,remoteStopReleases:true,idleDisconnectBlocks:true};
+  }finally{await f.ctx.close();}
+}
+
+async function checkManagedDiscrete(){
+  const f=await scenario(844,390,{managed:true});
+  try{
+    const {page}=f;
+    await joystickReady(page);
+    assert(await page.getByRole('button',{name:'Demo del control',exact:true}).isDisabled());
+    await page.getByRole('button',{name:'Cambiar velocidad',exact:true}).click();
+    await wait(()=>motionPosts(f).length===1,'no se solicitó el mando individual');
+    assert.equal(motionPosts(f)[0].id,5);
+    assert.equal(motionPosts(f)[0].barrier,'1');
+    await page.locator('#stopButton').click();
+    await wait(()=>f.barrier===2,'DETENER no rotó la barrera');
+    await joystickReady(page);
+    await page.locator('#showDemos').click();
+    await page.locator('#demoSelect').selectOption('1');
+    await wait(()=>page.locator('#startDemoButton').isEnabled(),'DEMO no quedó disponible después de DETENER');
+    await page.locator('#startDemoButton').click();
+    await wait(()=>f.posts.some(p=>p.path.endsWith('/iniciar')),'no se solicitó la DEMO');
+    assert.equal(f.posts.find(p=>p.path.endsWith('/iniciar')).barrier,'2');
+    await label(page,'#demoState','En curso');
+    ++f.barrier;
+    f.send('demo_fin',{...f.execution,fecha_hora:stamp(++f.id)});
+    await label(page,'#demoState','Finalizada');
+    await page.locator('#showControl').click();
+    await joystickReady(page);
+    await page.getByRole('button',{name:'Subir grúa',exact:true}).click();
+    await wait(()=>motionPosts(f).length===2,'no se solicitó el mando posterior a DEMO');
+    assert.equal(motionPosts(f)[1].barrier,'3');
+    report.scenarios.managedDiscrete={retainsCatalogId:true,stopRotatesBarrier:true,demoUsesNewBarrier:true,
+      remoteDemoGated:true,demoFinRefreshesBarrier:true};
   }finally{await f.ctx.close();}
 }
 
 const reps=new Set(['390x844','844x390','768x1024','1440x900']);
 try{
   await checkSustainedPointer();
+  await checkManagedDiscrete();
   const layoutErrors=[];
   for(const [width,height] of viewports){
     const tag=width+'x'+height;

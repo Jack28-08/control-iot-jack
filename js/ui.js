@@ -90,13 +90,18 @@ export function renderCommands(catalog,onClick){
     const copy=node('span',undefined,'cmd-copy');copy.append(node('span',label),status);
     b.append(icon,copy);
     b.title=Number.isInteger(c.codigo)?`${label} · Código ${c.codigo}`:label;
+    b.dataset.commandTitle=b.title;
     b.setAttribute('aria-label',label);
     b.addEventListener('click',()=>onClick(c));groups.get(group).append(b);
     if(focusedId===b.dataset.commandId)b.focus({preventScroll:true});
   }
 }
-export function lockCommands(locked){
-  for(const b of document.querySelectorAll('[data-command-id]'))b.disabled=locked;
+export function lockCommands(locked,lockedDemo){
+  for(const b of document.querySelectorAll('[data-command-id]')){
+    const blocked=String(lockedDemo)===b.dataset.commandId;
+    b.disabled=locked||blocked;
+    b.title=blocked?'Demo del control deshabilitada hasta comprobar el corte del mando.':b.dataset.commandTitle;
+  }
 }
 export function markCommandState(last,phase,pending){
   const labels={sending:'Enviando…',accepted:'Aceptado',received:'Evento recibido',error:'Sin confirmar'};

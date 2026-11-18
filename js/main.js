@@ -1,14 +1,14 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
-import {ApiClient} from './api.js?v=4';
+import {ApiClient} from './api.js?v=5';
 import {VehicleSocket} from './socket.js';
-import {ControlSession} from './control.js?v=4';
+import {ControlSession} from './control.js?v=5';
 import {DIRECTIONS,validCommands,commandByName} from './catalog.js';
 import {isDiagonal} from './directions.js';
-import {SustainedControl} from './sustained.js';
+import {SustainedControl} from './sustained.js?v=5';
 import {initJoystick} from './joystick.js?v=4';
 import {initNavigation} from './navigation.js?v=2';
 import {MonitorSession} from './monitor.js';
-import * as ui from './ui.js?v=4';
+import * as ui from './ui.js?v=5';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
@@ -16,7 +16,7 @@ const monitor=new MonitorSession(api,ui.renderMonitor);
 let renewalTimer=null;
 let joystick, demos=[], catalogBusy=false, catalogLoaded=false, selectionVersion=0;
 let apiAvailable=null, healthBusy=false, rdsBusy=false;
-let gestureRequested=false, manualActive=false, awaitingConnection=false, inputPreviewOnly=false;
+let gestureRequested=false, manualActive=false, awaitingConnection=false, inputPreviewOnly=false, wsOnline=false;
 let preserveCapture=false;
 const directionLabels={up:'Avanzar',right:'Girar a la derecha',down:'Retroceder',left:'Girar a la izquierda',
   'up-right':'Avanzar a la derecha','up-left':'Avanzar a la izquierda',
@@ -41,7 +41,8 @@ const sustained=new SustainedControl(api,{
 });
 const control=new ControlSession(api,{
   change:refreshControls,operation:ui.setOperation,movement:ui.displayMovement,
-  canDispatch:canDrive,
+  canDispatch:canDrive,barrier:()=>sustained.barrier,
+  refreshBarrier,
   step:ui.markDemoStep,neutral:({preservePreview=false}={})=>{
     manualActive=false;gestureRequested=false;
     if(preservePreview&&(inputPreviewOnly||preserveCapture))return;
@@ -78,12 +79,22 @@ function accessChanged(){
   }
 }
 function canDrive(){
-  return api.hasAccess&&navigator.onLine&&!awaitingConnection&&!sustained.releasing&&!$('#authDialog').open&&control.canMove();
+  const available=sustained.mode==='legacy'||(wsOnline&&sustained.ready);
+  return available&&api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
 }
 function canJoystick(){return canDrive()&&(sustained.mode==='legacy'||(api.hasKey&&sustained.ready&&!state.movementBusy));}
+function refreshBarrier(){
+  if(sustained.mode!=='managed')return;
+  if(sustained.active){stopManual();return;}
+  if(sustained.releasing)return;
+  sustained.invalidate();
+  void sustained.refresh();
+}
 function refreshControls(){
   ui.setAccessLabel(api.hasKey,api.evaluationStatus,{operatorForJoystick:sustained.mode==='managed'});
-  ui.lockCommands(!canDrive()||sustained.active);
+  const remoteDemo=commandByName(state.commands,'DEMO');
+  const lockedDemo=sustained.mode==='managed'&&!sustained.remoteDemo?remoteDemo?.id_comando:null;
+  ui.lockCommands(!canDrive()||sustained.active,lockedDemo);
   ui.markCommandState(state.lastRequested,state.movementPhase,state.pending);
   ui.setDemoButtons({canStart:canDrive()&&!sustained.active&&control.canStart(),
     canCancel:api.hasAccess&&(state.demoActive||state.uncertain)&&!state.demoBusy&&!state.stopBusy&&Boolean(state.activeDemoId),
@@ -137,6 +148,7 @@ async function loadDemoPlan(id){
   }catch(error){if(version===selectionVersion)opError('Secuencia',error);}
 }
 const socket=new VehicleSocket(value=>{
+  wsOnline=value==='En línea';
   ui.setIndicator('ws',value,value==='En línea'?'ok':value==='Desconectado'?'error':'wait');
   monitor.connection(value);
   if(value==='En línea'){
@@ -147,11 +159,7 @@ const socket=new VehicleSocket(value=>{
   }
 },event=>{
   const activeLease=sustained.active;
-  if(event.tipo==='detencion_logica'){
-    const managed=sustained.mode==='managed';
-    sustained.invalidate();
-    if(managed)void sustained.refresh();
-  }
+  if(['detencion_logica','demo_fin','demo_cancelada','demo_error'].includes(event.tipo))refreshBarrier();
   control.event(event);
   if(activeLease&&sustained.active&&state.demoActive&&state.execution===event.id_ejecucion){
     void sustained.release();
@@ -211,7 +219,8 @@ async function loadCatalog(){
     }
     ui.renderCommands(state.commands,cmd=>{
       if(!canDrive()||sustained.active)return;
-      if(Object.values(DIRECTIONS).some(direction=>commandByName(state.commands,direction)===cmd)){
+      if(cmd===commandByName(state.commands,'DEMO')&&!sustained.remoteDemo)return;
+      if(sustained.mode==='managed'||Object.values(DIRECTIONS).some(direction=>commandByName(state.commands,direction)===cmd)){
         manualActive=true;preserveCapture=false;
       }
       void control.move(cmd);
@@ -257,7 +266,7 @@ for(const button of ['#stopButton','#stopDemoButton']){
 }
 $('#demoSelect').addEventListener('change',()=>void selectDemo());
 $('#startDemoButton').addEventListener('click',()=>{if(canDrive()&&!sustained.active&&control.canStart())void control.start();});
-$('#cancelDemoButton').addEventListener('click',()=>{if(authorized())void control.cancel();});
+$('#cancelDemoButton').addEventListener('click',()=>{if(authorized())void control.cancel().finally(refreshBarrier);});
 $('#retryConnectionButton').addEventListener('click',()=>void retry());
 joystick=initJoystick(direction=>{
   if(sustained.mode!=='legacy'){

@@ -41,6 +41,24 @@ test('inicio DEMO exige HTTP 202 y conserva el cuerpo del contrato',async t=>{
   await assert.rejects(api.startDemo(3),e=>e.code==='unexpected_status'&&e.status===200);
 });
 
+test('la barrera de actuación sólo acompaña al movimiento y al inicio DEMO',async t=>{
+  const headers=[];
+  fakeFetch(t,async(url,options)=>{
+    headers.push(options.headers);
+    return json({},url.endsWith('/iniciar')?202:200);
+  });
+  const api=new ApiClient();api.setKey('test-operator');
+  await api.move(42,undefined,'test-barrier');
+  await api.startDemo(3,undefined,'test-barrier');
+  await api.cancelDemo(3);
+  await api.stop();
+  await api.move(42);
+  assert.deepEqual(headers.map(h=>h['X-IoT-Barrier']),[
+    'test-barrier','test-barrier',undefined,undefined,undefined,
+  ]);
+  assert(headers.every(h=>h['X-API-Key']==='test-operator'));
+});
+
 test('salud exige HTTP 200 y conserva el 503 para diagnóstico RDS',async t=>{
   let status=202;fakeFetch(t,async()=>json({status:'ok'},status));
   const api=new ApiClient();

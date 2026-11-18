@@ -60,11 +60,13 @@ export class ApiClient {
     this.#sessionRequest=load();
     return this.#sessionRequest;
   }
-  async request(path,{method='GET',body=null,authorized=false,signal=null,expectedStatus=null,timeoutMs=REQUEST_TIMEOUT_MS,keepalive=false}={}){
+  async request(path,{method='GET',body=null,authorized=false,signal=null,expectedStatus=null,
+    timeoutMs=REQUEST_TIMEOUT_MS,keepalive=false,barrier=null}={}){
     const session=authorized&&!this.hasKey&&this.hasEvaluation?this.#session:null;
     if(authorized&&!this.hasKey&&!session)throw new ApiError('Control no disponible. Comprueba si la evaluación está habilitada.',0,'auth_missing');
     const headers={Accept:'application/json'};
     if(body!==null)headers['Content-Type']='application/json';
+    if(barrier)headers['X-IoT-Barrier']=barrier;
     if(session)headers.Authorization=`Bearer ${session.token}`;
     else if(authorized)headers['X-API-Key']=this.#key;
     const controller=new AbortController();
@@ -104,8 +106,12 @@ export class ApiClient {
   history(signal){return this.request(PATHS.history(VEHICLE_ID),{signal,expectedStatus:200});}
   demos(){return this.request(PATHS.demos(VEHICLE_ID));}
   demoSteps(id){return this.request(PATHS.demoSteps(VEHICLE_ID,id));}
-  move(id,signal){return this.request(PATHS.movement(VEHICLE_ID),{method:'POST',authorized:true,body:{id_comando:id,origen:ORIGIN_TAG},signal});}
-  startDemo(id,signal){return this.request(PATHS.startDemo(VEHICLE_ID,id),{method:'POST',authorized:true,expectedStatus:202,signal});}
+  move(id,signal,barrier){return this.request(PATHS.movement(VEHICLE_ID),{
+    method:'POST',authorized:true,body:{id_comando:id,origen:ORIGIN_TAG},signal,barrier,
+  });}
+  startDemo(id,signal,barrier){return this.request(PATHS.startDemo(VEHICLE_ID,id),{
+    method:'POST',authorized:true,expectedStatus:202,signal,barrier,
+  });}
   cancelDemo(id){return this.request(PATHS.cancelDemo(VEHICLE_ID,id),{method:'POST',authorized:true});}
   stop(){return this.request(PATHS.stop(VEHICLE_ID),{method:'POST',authorized:true,keepalive:true});}
   sustainedCapability(){return this.request(PATHS.sustained(VEHICLE_ID,'capacidad'),{expectedStatus:200,timeoutMs:2500});}

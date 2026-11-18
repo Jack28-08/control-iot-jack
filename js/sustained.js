@@ -37,7 +37,9 @@ export class SustainedControl {
   get active() { return this.#gesture !== null; }
   get releasing() { return this.#release !== null; }
   get ready() { return this.#mode === 'managed' && this.#cap?.disponible === true && !this.releasing; }
+  get barrier() { return this.ready ? this.#cap.barrera : null; }
   get diagonals() { return this.ready && this.#cap.diagonales; }
+  get remoteDemo() { return this.#mode === 'legacy' || (this.ready && this.#cap.demo_remota === true); }
   get latencySamples() { return this.#samples.map(sample => ({...sample})); }
 
   #measure(action, started, accepted) {
