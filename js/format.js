@@ -2,6 +2,10 @@
 const movements=Object.freeze({
   AVANZAR:['Avanzar','↑','drive'],
   RETROCEDER:['Retroceder','↓','drive'],
+  AVANZAR_IZQUIERDA:['Avanzar a la izquierda','↖','drive'],
+  AVANZAR_DERECHA:['Avanzar a la derecha','↗','drive'],
+  RETROCEDER_IZQUIERDA:['Retroceder a la izquierda','↙','drive'],
+  RETROCEDER_DERECHA:['Retroceder a la derecha','↘','drive'],
   GI:['Girar a la izquierda','←','drive'],
   IZQUIERDA:['Girar a la izquierda','←','drive'],
   GIRAR_IZQUIERDA:['Girar a la izquierda','←','drive'],

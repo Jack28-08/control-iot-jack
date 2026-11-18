@@ -78,3 +78,5 @@ El 13 de noviembre de 2026, en la práctica 4.2, Swagger, `/health`, `/health/db
 El frontend conserva el contrato de sesión temporal y el acceso privado de operador. Para esta revisión se utilizaron dobles REST y WSS porque la prueba de integración queda pendiente de que el operador disponga de EC2. El [recorrido de verificación](./docs/VERIFICACION_4_2.md) cubre movimiento y DEMO supervisados, historial tras nuevas escrituras y teléfono físico.
 
 El control sostenido utiliza un permiso renovable y un canal privado para el dispositivo. La [guía de instalación y comprobación](./docs/CONTROL_INTEGRADO_INSTALACION.md) reúne los pasos de banco con la tracción desconectada, la configuración de FastAPI y la validación del frontend.
+
+La [integración de acceso directo](./docs/INTEGRACION_DEFINITIVA_NODE01.md) documenta el catálogo de diagonales, los acuses, las métricas y el orden de instalación. La [matriz comparativa](./docs/AUDITORIA_COMPARATIVA_NODE01.md) reúne las fuentes y el alcance de cada prueba.

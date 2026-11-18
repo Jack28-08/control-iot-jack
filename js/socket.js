@@ -1,7 +1,8 @@
 import {WS_URL, VEHICLE_ID, REQUEST_TIMEOUT_MS} from './config.js';
-import {safeEventPayload} from './catalog.js';
+import {safeEventPayload} from './catalog.js?v=6';
 export class VehicleSocket {
   #socket=null;#timer=null;#handshakeTimer=null;#attempt=0;#closed=true;
+  #seen=new Set();
   constructor(onStatus,onEvent){this.onStatus=onStatus;this.onEvent=onEvent;}
   start(){
     if(!this.#closed)return;
@@ -43,7 +44,13 @@ export class VehicleSocket {
     socket.addEventListener('message',evt=>{
       if(this.#closed||this.#socket!==socket)return;
       const payload=safeEventPayload(evt.data,VEHICLE_ID);
-      if(payload)this.onEvent(payload);
+      if(!payload)return;
+      if(payload.id_evento){
+        if(this.#seen.has(payload.id_evento))return;
+        this.#seen.add(payload.id_evento);
+        if(this.#seen.size>128)this.#seen.delete(this.#seen.values().next().value);
+      }
+      this.onEvent(payload);
     });
     socket.addEventListener('error',()=>{if(this.#socket===socket)this.onStatus('Desconectado');});
     socket.addEventListener('close',()=>this.#disconnect(socket));

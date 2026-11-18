@@ -6,7 +6,7 @@ export class ApiError extends Error {
 }
 const HTTP_MESSAGES = Object.freeze({
   401:'El acceso ya no es válido. Comprueba la conexión y el acceso antes de intentarlo de nuevo.',
-  403:'El acceso no permite esta acción o la evaluación está cerrada.',
+  403:'El acceso no permite esta acción.',
   404:'El vehículo o recurso solicitado no existe.',
   409:'El vehículo está ocupado o la operación entra en conflicto con su estado.',
   422:'La API rechazó los datos de la solicitud.',
@@ -24,6 +24,8 @@ export class ApiClient {
   constructor(onAccessChange=()=>{}){this.#change=onAccessChange;}
   get hasKey(){return this.#key.length>0;}
   get hasEvaluation(){return this.evaluationRemaining>0;}
+  get hasDirect(){return this.hasEvaluation&&this.#session.direct;}
+  get canSustain(){return this.hasKey||this.hasDirect;}
   get evaluationRemaining(){return this.#session?Math.max(0,this.#session.expires-Date.now()):0;}
   get hasAccess(){return this.hasKey||this.hasEvaluation;}
   get evaluationStatus(){return this.hasEvaluation?'active':this.#evaluationStatus==='active'?'closed':this.#evaluationStatus;}
@@ -45,7 +47,7 @@ export class ApiClient {
         if(typeof data?.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(data.token)||!Number.isFinite(expires)||expires<=Date.now())
           throw new ApiError('La sesión temporal no está disponible.',0,'invalid_session');
         if(revision===this.#sessionRevision){
-          this.#session={token:data.token,expires};this.#evaluationStatus='active';
+          this.#session={token:data.token,expires,direct:data.modo==='directo'};this.#evaluationStatus='active';
         }
       }catch(error){
         if(revision===this.#sessionRevision){
@@ -63,7 +65,7 @@ export class ApiClient {
   async request(path,{method='GET',body=null,authorized=false,signal=null,expectedStatus=null,
     timeoutMs=REQUEST_TIMEOUT_MS,keepalive=false,barrier=null}={}){
     const session=authorized&&!this.hasKey&&this.hasEvaluation?this.#session:null;
-    if(authorized&&!this.hasKey&&!session)throw new ApiError('Control no disponible. Comprueba si la evaluación está habilitada.',0,'auth_missing');
+    if(authorized&&!this.hasKey&&!session)throw new ApiError('Control no disponible. Comprueba el acceso y la conexión.',0,'auth_missing');
     const headers={Accept:'application/json'};
     if(body!==null)headers['Content-Type']='application/json';
     if(barrier)headers['X-IoT-Barrier']=barrier;
@@ -107,7 +109,8 @@ export class ApiClient {
   demos(){return this.request(PATHS.demos(VEHICLE_ID));}
   demoSteps(id){return this.request(PATHS.demoSteps(VEHICLE_ID,id));}
   move(id,signal,barrier){return this.request(PATHS.movement(VEHICLE_ID),{
-    method:'POST',authorized:true,body:{id_comando:id,origen:ORIGIN_TAG},signal,barrier,
+    method:'POST',authorized:true,
+    body:{id_comando:id,origen:ORIGIN_TAG,...(barrier?{id_solicitud:crypto.randomUUID()}:{})},signal,barrier,
   });}
   startDemo(id,signal,barrier){return this.request(PATHS.startDemo(VEHICLE_ID,id),{
     method:'POST',authorized:true,expectedStatus:202,signal,barrier,
@@ -116,7 +119,7 @@ export class ApiClient {
   stop(){return this.request(PATHS.stop(VEHICLE_ID),{method:'POST',authorized:true,keepalive:true});}
   sustainedCapability(){return this.request(PATHS.sustained(VEHICLE_ID,'capacidad'),{expectedStatus:200,timeoutMs:2500});}
   sustainedRequest(action,body,signal){
-    if(!this.#key)return Promise.reject(new ApiError('El control sostenido requiere acceso de operador.',0,'operator_required'));
+    if(!this.canSustain)return Promise.reject(new ApiError('El control sostenido requiere acceso habilitado.',0,'operator_required'));
     return this.request(PATHS.sustained(VEHICLE_ID,action),{method:'POST',authorized:true,body,signal,
       expectedStatus:200,timeoutMs:1250,keepalive:action==='liberar'});
   }

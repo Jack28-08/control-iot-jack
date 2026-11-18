@@ -1,4 +1,4 @@
-import {validEvent} from './protocol.js';
+import {validEvent} from './protocol.js?v=6';
 
 // El catálogo final SIEMPRE proviene de GET /vehiculos/{id}/comandos.
 // Esta tabla sólo decide cómo se etiqueta cada acción conocida para la interfaz.
@@ -15,6 +15,7 @@ export const LABELS = Object.freeze({
   DEMO: { label:'DEMO DEL CONTROL', icon:'◎', group:'extra' },
 });
 export const DIRECTIONS = Object.freeze({ up:'AVANZAR',down:'RETROCEDER',left:'GIRAR_IZQUIERDA',right:'GIRAR_DERECHA' });
+export const DIAGONAL_COMMANDS = new Set(['AVANZAR_IZQUIERDA','AVANZAR_DERECHA','RETROCEDER_IZQUIERDA','RETROCEDER_DERECHA']);
 export const KEY_DIRECTIONS = Object.freeze({ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'});
 export function validCommands(catalog, vehicleId){
   if (!Array.isArray(catalog)) return [];

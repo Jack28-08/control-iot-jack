@@ -47,11 +47,12 @@ const errors=[];
 const wait=async(fn,msg)=>{for(let i=0;i<120;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50));}throw Error(msg);};
 const label=async(page,selector,value)=>wait(async()=>String(await page.locator(selector).textContent()).includes(value),selector+' no muestra '+value);
 
-async function scenario(width,height,{managed=false}={}){
+async function scenario(width,height,{managed=false,direct=false}={}){
   const handheld=width<600||height<500;
   const ctx=await browser.newContext({viewport:{width,height},hasTouch:handheld,isMobile:handheld,serviceWorkers:'block'});
   const page=await ctx.newPage();
   const commands=baseCommands.map((nombre,i)=>({nombre,id_comando:i+1,codigo:(i+1)*10,activo:true,id_vehiculo:1}));
+  const diagonal={nombre:'AVANZAR_DERECHA',id_comando:43,codigo:10,activo:true,id_vehiculo:1};
   const demos=[{id_demo:1,nombre:'Recorrido corto',id_vehiculo:1,activo:true}];
   const steps=[commands[1],commands[0],...commands.slice(2)].map((c,i)=>({id_demo_movimiento:i+1,id_demo:1,orden:i+1,
     id_comando:c.id_comando,comando:c.nombre,codigo:c.codigo,duracion_ms:600,pausa_ms:300}));
@@ -115,10 +116,12 @@ async function scenario(width,height,{managed=false}={}){
         await send(200,{habilitado:true,disponible:true,diagonales:true,demo_remota:false,barrera:String(f.barrier),ttl_ms:750,renovar_ms:200});
         return;
       }
-      if(path==='/evaluacion/vehiculos/1'){f.authHits++;await send(f.authorized?200:403,f.authorized?{token:fixtureBearer,expires_at:new Date(Date.now()+600000).toISOString()}:{detail:'cerrado'});return;}
+      if(path==='/evaluacion/vehiculos/1'){f.authHits++;await send(f.authorized?200:403,f.authorized?{
+        token:fixtureBearer,expires_at:new Date(Date.now()+600000).toISOString(),...(direct?{modo:'directo'}:{})
+      }:{detail:'cerrado'});return;}
       if(path==='/health'||path==='/health/db'){const status=path==='/health'?f.status.health:f.status.rds;await send(status,status===200?{status:'ok'}:{status:'unavailable'});return;}
       if(path==='/vehiculos/1'){await send(200,vehicle);return;}
-      if(path==='/vehiculos/1/comandos'){await send(200,commands);return;}
+      if(path==='/vehiculos/1/comandos'){await send(200,direct?[...commands,diagonal]:commands);return;}
       if(path==='/vehiculos/1/demos'){await send(200,demos);return;}
       if(path==='/vehiculos/1/demos/1/movimientos'){await send(200,steps);return;}
       if(path==='/vehiculos/1/estado'){
@@ -135,7 +138,7 @@ async function scenario(width,height,{managed=false}={}){
       }
     }
     if(method==='POST'){
-      const valid=f.authorized&&(f.managed&&path.startsWith('/vehiculos/1/control/')
+      const valid=f.authorized&&(f.managed&&!direct&&path.startsWith('/vehiculos/1/control/')
         ?headers['x-api-key']==='operador-local-de-prueba'
         :headers.authorization==='Bearer '+fixtureBearer&&!headers['x-api-key']);
       const body=req.postDataJSON();
@@ -790,7 +793,38 @@ async function checkManagedDiscrete(){
 }
 
 const reps=new Set(['390x844','844x390','768x1024','1440x900']);
+async function checkDirectAccess(){
+  const f=await scenario(390,844,{managed:true,direct:true});
+  try{
+    const {page}=f;
+    await label(page,'#accessState','Acceso directo');
+    assert(await page.locator('#credentialsButton').isHidden());
+    assert.equal(await page.locator('#commandButtons button').count(),8);
+    const stick=page.locator('#joystick');
+    await stick.focus();
+    await page.keyboard.down('ArrowUp');
+    await page.keyboard.down('ArrowRight');
+    await wait(()=>f.sustained.some(r=>r.action==='vector'&&r.longitudinal===1&&r.lateral===1),
+      'el acceso directo no obtuvo un permiso diagonal');
+    await page.keyboard.up('ArrowRight');
+    await page.keyboard.up('ArrowUp');
+    await wait(()=>f.sustained.some(r=>r.action==='liberar'),'el acceso directo no liberó el permiso');
+    assert(f.posts.every(post=>post.authorized));
+    await page.locator('#showMonitor').click();
+    const event={id_operacion:'00cbe900-2c2e-400a-bac9-13ec0329a5c0',estado_salida:'liberado',
+      mascara:0,simulado:true,ms_ida_vuelta:157,fecha_hora:stamp(++f.id)};
+    f.send('salida_dispositivo',event);
+    await label(page,'#monitorOutput','Banco simulado · liberada');
+    await checkLayout(page,'monitor');
+    const sessions=f.authHits;
+    await page.reload({waitUntil:'domcontentloaded'});
+    await label(page,'#accessState','Acceso directo');
+    await wait(()=>f.authHits>sessions,'la recarga no solicitó otro acceso automático');
+    report.scenarios.directAccess={automatic:true,diagonal:true,released:true,reload:true,simulatedAck:true};
+  }finally{await f.ctx.close();}
+}
 try{
+  await checkDirectAccess();
   await checkSustainedPointer();
   await checkManagedDiscrete();
   const layoutErrors=[];

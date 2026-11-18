@@ -1,4 +1,4 @@
-import {formatDuration,formatEvent,formatMessage,formatMovement,formatName,formatTimestamp,movementGroup,movementIcon} from './format.js';
+import {formatDuration,formatEvent,formatMessage,formatMovement,formatName,formatTimestamp,movementGroup,movementIcon} from './format.js?v=6';
 
 const $=s=>document.querySelector(s);
 const node=(tag,text,className)=>{
@@ -9,6 +9,7 @@ const node=(tag,text,className)=>{
 };
 let messageTimer=null,initialized=false,historyPage=0;
 let historyRows=[];
+let historySource=null,historyCapacity=0,historyResize=null;
 let demoOrder=null;
 
 export function initUi(){
@@ -16,7 +17,7 @@ export function initUi(){
   initialized=true;
   $('#historyPrevious').addEventListener('click',()=>{historyPage--;paintHistory();});
   $('#historyNext').addEventListener('click',()=>{historyPage++;paintHistory();});
-  window.addEventListener('resize',paintHistory,{passive:true});
+  window.addEventListener('resize',queueHistoryFit,{passive:true});
 }
 
 export function setIndicator(kind,label,state){
@@ -41,22 +42,23 @@ export function notify(message){
   n.textContent=text;n.hidden=false;detail.textContent=text;detail.hidden=false;
   clearTimeout(messageTimer);messageTimer=setTimeout(()=>n.hidden=true,6500);
 }
-export function setAccessLabel(enabled,evaluationStatus='idle',{operatorForJoystick=false}={}){
+export function setAccessLabel(enabled,evaluationStatus='idle',{operatorForJoystick=false,direct=false}={}){
   const access=$('#accessState'),button=$('#credentialsButton');
   const active=evaluationStatus==='active';
-  button.hidden=active&&!operatorForJoystick;
+  const needsKey=operatorForJoystick&&!enabled&&!direct;
+  button.hidden=active&&(!operatorForJoystick||direct);
   button.querySelector('span').textContent=enabled?'Clave activa':'Acceso';
-  access.hidden=!active||operatorForJoystick;
+  access.hidden=!active||(operatorForJoystick&&!direct);
   const unavailable=!active&&!enabled;
   document.querySelector('.actions-panel').dataset.authorized=String(!unavailable);
-  const message=operatorForJoystick&&!enabled?'Joystick sostenido requiere clave':
+  const message=needsKey?'Joystick sostenido requiere clave':
     evaluationStatus==='checking'?'Comprobando acceso':'Requiere acceso autorizado';
-  const showMessage=unavailable||(operatorForJoystick&&!enabled);
+  const showMessage=unavailable||needsKey;
   $('#controlAvailability').textContent=showMessage?message:'';
   $('#controlAvailability').hidden=!showMessage;
   if(active){
-    access.textContent='Evaluación activa';
-    if(!operatorForJoystick&&$('#authDialog').open)$('#authDialog').close();
+    access.textContent=direct?'Acceso directo':'Evaluación activa';
+    if((direct||!operatorForJoystick)&&$('#authDialog').open)$('#authDialog').close();
   }
 }
 export function renderCommands(catalog,onClick){
@@ -209,10 +211,8 @@ function rowsPerPage(){
   const size=Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue('--history-page-size'),10);
   return Number.isInteger(size)&&size>0?Math.min(size,10):3;
 }
-function paintHistory(){
-  const size=rowsPerPage(),pages=Math.max(1,Math.ceil(historyRows.length/size));
-  historyPage=Math.max(0,Math.min(historyPage,pages-1));
-  const start=historyPage*size,tbody=$('#historyRows');
+function paintHistoryRows(start,size){
+  const tbody=$('#historyRows');
   tbody.replaceChildren();
   for(const [i,row] of historyRows.slice(start,start+size).entries()){
     const tr=node('tr');
@@ -223,13 +223,48 @@ function paintHistory(){
     if(Number.isInteger(row.codigo))title.title=`${movement} · Código ${row.codigo}`;
     tr.append(node('td',String(start+i+1)),title,node('td',dates.date),node('td',dates.time));tbody.append(tr);
   }
+}
+function paintHistory(){
+  const size=historyCapacity||rowsPerPage(),pages=Math.max(1,Math.ceil(historyRows.length/size));
+  historyPage=Math.max(0,Math.min(historyPage,pages-1));
+  paintHistoryRows(historyPage*size,size);
   $('#historyTableWrap').hidden=historyRows.length===0;
   $('#historyPagination').hidden=pages<2;
   $('#historyPrevious').disabled=historyPage===0;
   $('#historyNext').disabled=historyPage===pages-1;
   $('#historyPage').textContent=`Página ${historyPage+1} de ${pages}`;
 }
-export function renderMonitor({state,history,stateStatus='idle',historyStatus='idle',phase}={}){
+function fitHistory(anchor){
+  const panel=$('#monitorView');
+  if(panel.hidden||!historyRows.length){paintHistory();return;}
+  $('#historyTableWrap').hidden=false;
+  $('#historyPagination').hidden=historyRows.length<2;
+  paintHistoryRows(0,historyRows.length);
+  const heights=Array.from($('#historyRows').rows,row=>row.getBoundingClientRect().height);
+  const page=document.documentElement;
+  const overflow=Math.max(0,page.scrollHeight-page.clientHeight);
+  const total=heights.reduce((sum,height)=>sum+height,0);
+  const tallest=Math.max(...heights);
+  historyCapacity=tallest>0
+    ?overflow<=1?historyRows.length:Math.max(1,Math.floor((total-overflow)/tallest))
+    :rowsPerPage();
+  if(anchor!==undefined){
+    const index=historyRows.findIndex(row=>row.id_historial===anchor);
+    if(index>=0)historyPage=Math.floor(index/historyCapacity);
+  }
+  paintHistory();
+}
+function historyAnchor(){
+  return historyPage>0?historyRows[historyPage*(historyCapacity||rowsPerPage())]?.id_historial:undefined;
+}
+function queueHistoryFit(){
+  if(historyResize!==null)return;
+  historyResize=requestAnimationFrame(()=>{
+    historyResize=null;
+    fitHistory(historyAnchor());
+  });
+}
+export function renderMonitor({state,history,stateStatus='idle',historyStatus='idle',phase,output}={}){
   const local=formatTimestamp(state?.timestamp);
   const source=state?.source==='WSS'?'Evento recibido en tiempo real':state?.source==='REST'?'Lectura del servidor':'';
   const event=formatEvent(state?.phase??phase??state?.eventType);
@@ -244,8 +279,22 @@ export function renderMonitor({state,history,stateStatus='idle',historyStatus='i
   $('#monitorDate').textContent=local.date;
   $('#monitorTime').textContent=local.time;
   $('#monitorCode').textContent=Number.isInteger(state?.code)?String(state.code):'—';
-  historyRows=Array.isArray(history)?history.slice(0,10):[];
+  const report=$('#monitorOutput');
+  const changedVisibility=report.hidden===Boolean(output);
+  report.hidden=!output;
+  if(output){
+    const format=formatTimestamp(output.timestamp);
+    const label=output.simulado?'Banco simulado':'Salida del dispositivo';
+    const status=output.estado_salida==='aplicado'?'aplicada':'liberada';
+    report.textContent=`${label} · ${status} · ${format.time}`;
+    report.title=`Acuse de la consigna en ${output.ms_ida_vuelta} ms · Operación ${output.id_operacion}`;
+  }
+  if(historySource!==history){
+    const anchor=historyAnchor();
+    historySource=history;
+    historyRows=Array.isArray(history)?history.slice(0,10):[];
+    fitHistory(anchor);
+  }else if(changedVisibility)queueHistoryFit();
   $('#historyCount').textContent=`${historyRows.length} de 10`;
   $('#historyStatus').textContent=historyLabels[historyStatus]??historyLabels.idle;
-  paintHistory();
 }

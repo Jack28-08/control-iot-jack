@@ -132,7 +132,9 @@ export class SustainedControl {
       input.pending = null;
       if (action === 'vector' && direction !== input.lastSent) {
         input.lastSent = direction;
-        this.#view.accepted(direction, sample);
+        const persistenceMs=Number.isInteger(response.ms_persistencia)&&response.ms_persistencia>=0
+          ?response.ms_persistencia:null;
+        this.#view.accepted(direction, {...sample,persistenceMs});
       }
       // El permiso inicial reserva en neutral. La primera orden viaja únicamente
       // si la interacción sigue vigente cuando llega esa confirmación.

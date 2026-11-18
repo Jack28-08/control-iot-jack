@@ -2,11 +2,12 @@
 // TIMESTAMP de estado/historial pueden llegar sin offset; WSS lo trae siempre.
 export const EVENT_TYPES = Object.freeze([
   'estado_inicial','movimiento_individual','detencion_logica','demo_inicio',
-  'demo_movimiento','demo_fin','demo_cancelada','demo_error',
+  'demo_movimiento','demo_fin','demo_cancelada','demo_error','salida_dispositivo',
 ]);
 export const positiveId = value => Number.isSafeInteger(value) && value > 0;
 export const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const nullable = (value, test) => value == null || test(value);
+const uuid = value => typeof value==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 
 export function timestamp(value, {mysqlUtc=false}={}) {
   if (typeof value !== 'string') return null;
@@ -22,6 +23,14 @@ export function timestamp(value, {mysqlUtc=false}={}) {
 
 export function validEvent(value, vehicleId) {
   if (!record(value) || value.id_vehiculo!==vehicleId || !EVENT_TYPES.includes(value.tipo) || !timestamp(value.fecha_hora)) return false;
+  if(!nullable(value.id_evento,uuid)||!nullable(value.id_operacion,uuid)||!nullable(value.id_historial,positiveId))return false;
+  if(value.tipo==='salida_dispositivo'){
+    const applied=value.estado_salida==='aplicado';
+    return uuid(value.id_operacion)&&typeof value.simulado==='boolean'
+      &&Number.isSafeInteger(value.ms_ida_vuelta)&&value.ms_ida_vuelta>=0
+      &&Number.isInteger(value.mascara)&&(applied?value.mascara>0&&value.mascara<=255:
+        value.estado_salida==='liberado'&&value.mascara===0);
+  }
   if (!nullable(value.id_comando,positiveId) || !nullable(value.comando,v=>typeof v==='string') ||
       !nullable(value.codigo,Number.isSafeInteger) || !nullable(value.conectado,v=>typeof v==='boolean') ||
       !nullable(value.id_ejecucion,v=>typeof v==='string'&&v.trim().length>0&&v.length<=128) ||

@@ -1,14 +1,14 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
-import {ApiClient} from './api.js?v=5';
-import {VehicleSocket} from './socket.js';
+import {ApiClient} from './api.js?v=6';
+import {VehicleSocket} from './socket.js?v=6';
 import {ControlSession} from './control.js?v=5';
-import {DIRECTIONS,validCommands,commandByName} from './catalog.js';
+import {DIAGONAL_COMMANDS,DIRECTIONS,validCommands,commandByName} from './catalog.js?v=6';
 import {isDiagonal} from './directions.js';
-import {SustainedControl} from './sustained.js?v=5';
+import {SustainedControl} from './sustained.js?v=6';
 import {initJoystick} from './joystick.js?v=4';
 import {initNavigation} from './navigation.js?v=2';
-import {MonitorSession} from './monitor.js';
-import * as ui from './ui.js?v=5';
+import {MonitorSession} from './monitor.js?v=6';
+import * as ui from './ui.js?v=6';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
@@ -25,8 +25,9 @@ const sustained=new SustainedControl(api,{
   change:refreshControls,
   accepted(direction,sample){
     ui.displayMovement(directionLabels[direction]);
+    const persistence=sample.persistenceMs==null?'':` Persistencia y publicación en ${sample.persistenceMs} ms.`;
     ui.setOperation(`${directionLabels[direction]} · permiso aceptado`,
-      `La orden lógica respondió en ${sample.milliseconds} ms. La respuesta no confirma las salidas del dispositivo.`);
+      `REST en ${sample.milliseconds} ms.${persistence} La respuesta no confirma las salidas del dispositivo.`);
   },
   released(sample){
     ui.displayMovement('Neutral');
@@ -61,7 +62,7 @@ const navigation=initNavigation(view=>{
 $('#monitorRefresh')?.addEventListener('click',()=>void monitor.refresh());
 
 function accessChanged(){
-  if(sustained.active&&!api.hasKey)void sustained.release();
+  if(sustained.active&&!api.canSustain)void sustained.release();
   if(!api.hasAccess&&manualActive){
     if(sustained.active)void sustained.release();
     manualActive=false;gestureRequested=false;control.interruptManual();
@@ -73,16 +74,15 @@ function accessChanged(){
     // Renovar antes de expirar, sin retrasar DETENER ni repetir un POST.
     const delay=Math.min(remaining,Math.max(1000,remaining-Math.min(15000,remaining/3)));
     renewalTimer=setTimeout(()=>{
-      if(api.hasEvaluation)void api.evaluation({force:true});
-      else api.clearEvaluation();
+      void api.evaluation({force:true});
     },delay);
   }
 }
 function canDrive(){
-  const available=sustained.mode==='legacy'||(wsOnline&&sustained.ready);
+  const available=(sustained.mode==='legacy'&&!api.hasDirect)||(wsOnline&&sustained.ready);
   return available&&api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
 }
-function canJoystick(){return canDrive()&&(sustained.mode==='legacy'||(api.hasKey&&sustained.ready&&!state.movementBusy));}
+function canJoystick(){return canDrive()&&(sustained.mode==='legacy'||(api.canSustain&&sustained.ready&&!state.movementBusy));}
 function refreshBarrier(){
   if(sustained.mode!=='managed')return;
   if(sustained.active){stopManual();return;}
@@ -91,7 +91,7 @@ function refreshBarrier(){
   void sustained.refresh();
 }
 function refreshControls(){
-  ui.setAccessLabel(api.hasKey,api.evaluationStatus,{operatorForJoystick:sustained.mode==='managed'});
+  ui.setAccessLabel(api.hasKey,api.evaluationStatus,{direct:api.hasDirect,operatorForJoystick:sustained.mode==='managed'});
   const remoteDemo=commandByName(state.commands,'DEMO');
   const lockedDemo=sustained.mode==='managed'&&!sustained.remoteDemo?remoteDemo?.id_comando:null;
   ui.lockCommands(!canDrive()||sustained.active,lockedDemo);
@@ -103,7 +103,7 @@ function refreshControls(){
 }
 function authorized(){
   if(api.hasAccess)return true;
-  const message=api.evaluationStatus==='checking'?'Comprobando el acceso de evaluación.':
+  const message=api.evaluationStatus==='checking'?'Comprobando el acceso de control.':
     'El control no está habilitado para esta sesión. Puedes seguir usando Monitoreo.';
   ui.notify(message);return false;
 }
@@ -158,6 +158,7 @@ const socket=new VehicleSocket(value=>{
     control.disconnected();onConnectionLost();refreshControls();
   }
 },event=>{
+  if(event.tipo==='salida_dispositivo'){monitor.event(event);return;}
   const activeLease=sustained.active;
   if(['detencion_logica','demo_fin','demo_cancelada','demo_error'].includes(event.tipo))refreshBarrier();
   control.event(event);
@@ -181,6 +182,7 @@ async function checkHealth(){
     if(result?.status!=='ok')throw Error('Salud sin estado concluyente.');
     $('#apiStatus').title=`Salud HTTPS en ${Math.round(performance.now()-start)} ms`;
     apiAvailable=true;ui.setIndicator('api','Disponible','ok');
+    if(!api.hasAccess)void api.evaluation();
     if(!state.stopBusy)void sustained.refresh();
     if(!catalogLoaded)void loadCatalog();
   }catch(error){
@@ -217,7 +219,7 @@ async function loadCatalog(){
       state.commands=[];
       ui.notify('No pudimos verificar los movimientos. Puedes intentar actualizar la conexión.');
     }
-    ui.renderCommands(state.commands,cmd=>{
+    ui.renderCommands(state.commands.filter(cmd=>!DIAGONAL_COMMANDS.has(cmd.nombre)),cmd=>{
       if(!canDrive()||sustained.active)return;
       if(cmd===commandByName(state.commands,'DEMO')&&!sustained.remoteDemo)return;
       if(sustained.mode==='managed'||Object.values(DIRECTIONS).some(direction=>commandByName(state.commands,direction)===cmd)){

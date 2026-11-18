@@ -1,5 +1,5 @@
 import {VEHICLE_ID} from './config.js';
-import {positiveId,record,timestamp,validEvent} from './protocol.js';
+import {positiveId,record,timestamp,validEvent} from './protocol.js?v=6';
 
 const LIMIT=10;
 const HISTORY_SETTLE_MS=120;
@@ -163,6 +163,10 @@ export class MonitorSession {
   event(event){
     if(!validEvent(event,this.vehicleId))return false;
     const type=event.tipo,at=timestamp(event.fecha_hora);
+    if(type==='salida_dispositivo'){
+      if(!this.model.output||at>=this.model.output.timestamp)this.#set({output:{...event,timestamp:at}});
+      return true;
+    }
     if(type==='movimiento_individual'&&(this.active||this.#loaded()))this.#queueHistory();
     if(type.startsWith('demo_')&&!this.#acceptDemo(event,at))return false;
     if(type==='detencion_logica'&&event.id_ejecucion)this.#finishDemo(event.id_ejecucion);
