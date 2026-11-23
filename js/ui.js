@@ -125,7 +125,7 @@ export function renderDemos(demos,{verified=true}={}){
   def.value='';s.append(def);
   for(const d of demos){
     const opt=node('option',formatName(d.nombre,'Secuencia sin nombre'));
-    opt.value=String(d.id_demo);s.append(opt);
+    opt.value=d.key??String(d.id_demo);s.append(opt);
   }
 }
 export function renderDemoSteps(steps=[]){

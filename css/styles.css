@@ -363,7 +363,7 @@ svg.ico {
   .history-table th,.history-table td { padding: 7px 5px; }
   .history-table { font-size: 12px; }
 }
-@media (min-width: 640px) and (orientation: landscape), (min-width: 700px) {
+@media (min-width: 560px) and (orientation: landscape), (min-width: 700px) {
   :root { --history-page-size: 3; }
   .page-wrap {
     grid-template: "header nav" auto "health health" auto "main main" minmax(auto,1fr) "feedback feedback" auto "footer footer" auto /
@@ -389,6 +389,31 @@ svg.ico {
 @media (orientation: landscape) and (max-height: 475px) {
   :root { --gap: 4px; --pad: 6px; --stage-min: 105px; }
   .access-dialog { max-width: 46vw; }
+}
+@media (min-width: 560px) and (orientation: landscape) and (max-height: 365px) {
+  .command-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .command-button {
+    grid-template-columns: minmax(0,1fr); justify-items: center; gap: 2px;
+    padding-inline: 2px; text-align: center; font-size: 10.5px;
+  }
+  .demo-console { grid-template-columns: minmax(0,1.8fr) minmax(0,1fr); gap: 4px; }
+  .demo-console > :not(.demo-actions,.stop-button) { grid-column: 1/-1; }
+  .demo-actions { gap: 3px; }
+  .demo-actions > button { padding-inline: 2px; }
+}
+@media (min-width: 560px) and (max-width: 639px) and (orientation: landscape) and (max-height: 365px) {
+  :root { --gap: 3px; --pad: 5px; --stage-min: 81px; }
+  .page-wrap { grid-template-columns: minmax(0,1fr) minmax(240px,43%); }
+  .brand strong { font-size: 19px; }
+  .header-row { gap: 5px; }
+  .header-unit { padding-left: 5px; }
+  .view-tab .ico { display: none; }
+  .panel-head h2 { font-size: 18px; }
+  .monitor-movement { font-size: 22px; }
+  .monitor-glyph { width: 35px; }
+  .monitor-meta div { padding: 4px 3px; }
+  .monitor-meta dd { font-size: 10px; }
+  .demo-console .stop-button { gap: 3px; padding-inline: 3px; font-size: 12px; }
 }
 @media (min-width: 750px) and (min-height: 660px) {
   :root { --gap: 12px; --pad: 14px; --radius: 20px; --stage-min: 160px; --history-page-size: 8; }

@@ -7,7 +7,7 @@ function harness(t){
   const sockets=[],timers=new Map();let next=0,throwConstructor=false;
   class FakeSocket{
     listeners=new Map();closed=false;
-    constructor(url){if(throwConstructor)throw new Error('Connection unavailable');this.url=url;sockets.push(this);}
+    constructor(url,protocols){if(throwConstructor)throw new Error('Connection unavailable');this.url=url;this.protocols=protocols;sockets.push(this);}
     addEventListener(type,callback){this.listeners.set(type,callback);}
     emit(type,data={}){this.listeners.get(type)?.(data);}
     close(){this.closed=true;this.emit('close');}
@@ -68,5 +68,29 @@ test('una conexión WSS sin handshake vence y reconecta sin aceptar apertura tar
   h.sockets[1].emit('open');
   assert.equal(h.statuses.at(-1),'En línea');
   assert.equal(h.timers.size,0);
+  h.client.close();
+});
+
+test('el ticket de plataforma viaja en subprotocolo y un ticket anterior no abre otra unidad',async t=>{
+  const h=harness(t);
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  let settleFirst;
+  h.client.configure(17,vehicle=>{
+    assert.equal(vehicle,17);return new Promise(resolve=>{settleFirst=resolve;});
+  });
+  h.client.start();
+  await flush();
+  const latest='Z'.repeat(32);
+  h.client.configure(22,vehicle=>{assert.equal(vehicle,22);return Promise.resolve(latest);});
+  h.client.start();
+  settleFirst('A'.repeat(32));
+  await flush();
+  assert.equal(h.sockets.length,1);
+  assert.equal(h.sockets[0].url,'wss://184-72-72-255.sslip.io/ws/vehiculos/22');
+  assert.deepEqual(h.sockets[0].protocols,['node01',`ticket.${latest}`]);
+  const event={tipo:'estado_inicial',fecha_hora:'2026-11-23T15:00:00Z'};
+  h.sockets[0].emit('message',{data:JSON.stringify({...event,id_vehiculo:17})});
+  h.sockets[0].emit('message',{data:JSON.stringify({...event,id_vehiculo:22})});
+  assert.deepEqual(h.events.map(event=>event.id_vehiculo),[22]);
   h.client.close();
 });

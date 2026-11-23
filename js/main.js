@@ -1,18 +1,20 @@
 import {VEHICLE_ID, API_CHECK_MS, RDS_CHECK_MS} from './config.js';
-import {ApiClient} from './api.js?v=6';
-import {VehicleSocket} from './socket.js?v=6';
-import {ControlSession} from './control.js?v=5';
+import {ApiClient} from './api.js?v=7';
+import {VehicleSocket} from './socket.js?v=7';
+import {ControlSession} from './control.js?v=7';
 import {DIAGONAL_COMMANDS,DIRECTIONS,validCommands,commandByName} from './catalog.js?v=6';
 import {isDiagonal} from './directions.js';
 import {SustainedControl} from './sustained.js?v=6';
 import {initJoystick} from './joystick.js?v=4';
-import {initNavigation} from './navigation.js?v=2';
+import {initNavigation} from './navigation.js?v=3';
 import {MonitorSession} from './monitor.js?v=6';
-import * as ui from './ui.js?v=6';
+import * as ui from './ui.js?v=7';
+import {Platform43} from './platform43.js?v=1';
 
 const $=s=>document.querySelector(s);
 const api=new ApiClient(accessChanged);
-const monitor=new MonitorSession(api,ui.renderMonitor);
+let monitor=new MonitorSession(api,ui.renderMonitor),portal=null;
+let scope=0,switching=false,platformChecked=false,protectedObserved=false;
 let renewalTimer=null;
 let joystick, demos=[], catalogBusy=false, catalogLoaded=false, selectionVersion=0;
 let apiAvailable=null, healthBusy=false, rdsBusy=false;
@@ -21,26 +23,34 @@ let preserveCapture=false;
 const directionLabels={up:'Avanzar',right:'Girar a la derecha',down:'Retroceder',left:'Girar a la izquierda',
   'up-right':'Avanzar a la derecha','up-left':'Avanzar a la izquierda',
   'down-right':'Retroceder a la derecha','down-left':'Retroceder a la izquierda'};
-const sustained=new SustainedControl(api,{
+function buildSustained(){
+const generation=scope;
+return new SustainedControl(api,{
   change:refreshControls,
   accepted(direction,sample){
+    if(generation!==scope)return;
     ui.displayMovement(directionLabels[direction]);
     const persistence=sample.persistenceMs==null?'':` Persistencia y publicación en ${sample.persistenceMs} ms.`;
     ui.setOperation(`${directionLabels[direction]} · permiso aceptado`,
       `REST en ${sample.milliseconds} ms.${persistence} La respuesta no confirma las salidas del dispositivo.`);
   },
   released(sample){
+    if(generation!==scope)return;
     ui.displayMovement('Neutral');
     ui.setOperation('Permiso liberado',`El servidor confirmó la revocación en ${sample.milliseconds} ms. El dispositivo conserva su plazo automático.`);
   },
   failed(sample){
+    if(generation!==scope)return;
     manualActive=false;gestureRequested=false;preserveCapture=false;joystick?.neutral();
     ui.displayMovement('Sin confirmar');
     ui.setOperation('Control sostenido interrumpido',
       `Sin confirmación de ${sample.action} (${sample.milliseconds} ms). Revisa el enlace y usa DETENER si corresponde.`);
   },
 });
-const control=new ControlSession(api,{
+}
+let sustained=buildSustained();
+function buildControl(){
+return new ControlSession(api,{
   change:refreshControls,operation:ui.setOperation,movement:ui.displayMovement,
   canDispatch:canDrive,barrier:()=>sustained.barrier,
   refreshBarrier,
@@ -51,17 +61,19 @@ const control=new ControlSession(api,{
   },
   confirmed:result=>monitor.confirmIndividual(result),
 });
-const state=control.state;
+}
+let control=buildControl(),state=control.state;
 ui.initUi();
 const navigation=initNavigation(view=>{
   joystick?.neutral({notify:true});
   if(view==='demo'&&manualActive)stopManual();
-  if(view==='monitor')void monitor.enter();
+  if(view==='monitor'&&api.vehicleId)void monitor.enter();
   else monitor.leave();
 });
 $('#monitorRefresh')?.addEventListener('click',()=>void monitor.refresh());
 
 function accessChanged(){
+  if(api.platformEnabled&&!api.signedIn)portal?.sessionEnded();
   if(sustained.active&&!api.canSustain)void sustained.release();
   if(!api.hasAccess&&manualActive){
     if(sustained.active)void sustained.release();
@@ -79,8 +91,10 @@ function accessChanged(){
   }
 }
 function canDrive(){
+  if(!platformChecked||switching||!api.vehicleId)return false;
+  if(api.platformEnabled&&api.physicalUnit&&!sustained.ready)return false;
   const available=(sustained.mode==='legacy'&&!api.hasDirect)||(wsOnline&&sustained.ready);
-  return available&&api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
+  return available&&(!api.platformEnabled||wsOnline)&&api.hasAccess&&navigator.onLine&&!awaitingConnection&&!$('#authDialog').open&&control.canMove();
 }
 function canJoystick(){return canDrive()&&(sustained.mode==='legacy'||(api.canSustain&&sustained.ready&&!state.movementBusy));}
 function refreshBarrier(){
@@ -92,6 +106,12 @@ function refreshBarrier(){
 }
 function refreshControls(){
   ui.setAccessLabel(api.hasKey,api.evaluationStatus,{direct:api.hasDirect,operatorForJoystick:sustained.mode==='managed'});
+  if(api.platformEnabled){
+    $('#credentialsButton').hidden=true;
+    $('#accessState').hidden=true;
+    $('#controlAvailability').hidden=api.hasAccess;
+    $('#controlAvailability').textContent=api.hasAccess?'':'Mando sin permiso';
+  }
   const remoteDemo=commandByName(state.commands,'DEMO');
   const lockedDemo=sustained.mode==='managed'&&!sustained.remoteDemo?remoteDemo?.id_comando:null;
   ui.lockCommands(!canDrive()||sustained.active,lockedDemo);
@@ -129,16 +149,19 @@ function onConnectionLost(){
 }
 async function selectDemo(){
   if(state.demoActive||state.demoBusy||state.stopBusy||state.uncertain)return;
-  const demo=demos.find(d=>String(d.id_demo)===$('#demoSelect').value);
-  await loadDemoPlan(demo?.id_demo??null);
+  const demo=demos.find(d=>(d.key??String(d.id_demo))===$('#demoSelect').value);
+  await loadDemoPlan(demo??null);
 }
-async function loadDemoPlan(id){
+async function loadDemoPlan(demo){
   const version=++selectionVersion;
-  state.selectedDemo=id;state.stepsReady=false;
+  const id=demo?.id_demo;
+  state.selectedDemo=id??null;state.commercialDemo=demo?.commercial===true;state.stepsReady=false;
   ui.renderDemoSteps([]);refreshControls();
   if(!id)return;
   try{
-    const result=await api.demoSteps(id);
+    const result=demo.commercial?demo.pasos.map((step,index)=>({...step,orden:step.orden??index+1,
+      comando:state.commands.find(command=>command.codigo===step.codigo)?.nombre??`Código ${step.codigo}`})):
+      await api.demoSteps(id);
     if(version!==selectionVersion)return;
     if(!Array.isArray(result))throw Error('El servidor no devolvió una lista de pasos.');
     state.stepsReady=result.length>0;
@@ -154,8 +177,14 @@ const socket=new VehicleSocket(value=>{
   if(value==='En línea'){
     awaitingConnection=false;
     control.connected();refreshControls();void sustained.refresh();
+    if(api.platformEnabled&&navigation.view==='monitor')void monitor.enter();
   }else if(value==='Desconectado'){
     control.disconnected();onConnectionLost();refreshControls();
+    if(api.platformEnabled&&!switching){
+      monitor.close();
+      monitor=new MonitorSession(api,ui.renderMonitor,{vehicleId:api.vehicleId});
+      ui.renderMonitor();
+    }
   }
 },event=>{
   if(event.tipo==='salida_dispositivo'){monitor.event(event);return;}
@@ -166,10 +195,15 @@ const socket=new VehicleSocket(value=>{
     void sustained.release();
   }
   monitor.event(event);
-  if(['demo_inicio','demo_movimiento'].includes(event.tipo)&&state.demoActive&&state.activeDemoId!==state.selectedDemo){
+  if(['demo_inicio','demo_movimiento'].includes(event.tipo)&&state.demoActive
+    &&(state.activeDemoId!==state.selectedDemo||(event.origen_demo==='comercial'&&!state.commercialDemo))){
     // Una DEMO de otro cliente también debe mostrar su propio plan consultado por GET.
-    $('#demoSelect').value=String(state.activeDemoId);
-    void loadDemoPlan(state.activeDemoId);
+    const key=event.origen_demo==='comercial'?`43:${state.activeDemoId}`:String(state.activeDemoId);
+    const observed=demos.find(item=>(item.key??String(item.id_demo))===key);
+    if(observed){
+      $('#demoSelect').value=key;
+      void loadDemoPlan(observed);
+    }
   }
 });
 
@@ -182,9 +216,11 @@ async function checkHealth(){
     if(result?.status!=='ok')throw Error('Salud sin estado concluyente.');
     $('#apiStatus').title=`Salud HTTPS en ${Math.round(performance.now()-start)} ms`;
     apiAvailable=true;ui.setIndicator('api','Disponible','ok');
-    if(!api.hasAccess)void api.evaluation();
-    if(!state.stopBusy)void sustained.refresh();
-    if(!catalogLoaded)void loadCatalog();
+    if(platformChecked&&!api.platformEnabled&&!api.hasAccess)void api.evaluation();
+    if(platformChecked&&api.vehicleId&&!switching){
+      if(!state.stopBusy)void sustained.refresh();
+      if(!catalogLoaded)void loadCatalog();
+    }
   }catch(error){
     apiAvailable=false;ui.setIndicator('api','No disponible','error');
     $('#apiStatus').title='No se pudo verificar la disponibilidad del servidor.';
@@ -204,16 +240,18 @@ async function checkRds(){
   }finally{rdsBusy=false;}
 }
 async function loadCatalog(){
-  if(catalogBusy)return;
+  if(catalogBusy||!api.vehicleId||switching)return;
+  const generation=scope,vehicle=api.vehicleId;
   catalogBusy=true;
   try{
-    const [v,c,d]=await Promise.allSettled([api.vehicle(),api.commands(),api.demos()]);
-    if(v.status==='fulfilled'&&v.value?.id_vehiculo===VEHICLE_ID&&typeof v.value?.nombre==='string'){
+    const [v,c,d,commercial]=await Promise.allSettled([api.vehicle(),api.commands(),api.demos(),api.commercialDemos()]);
+    if(generation!==scope)return;
+    if(v.status==='fulfilled'&&v.value?.id_vehiculo===vehicle&&typeof v.value?.nombre==='string'){
       ui.displayVehicle(v.value.nombre);monitor.setVehicleName(v.value.nombre);
     }
     else ui.displayVehicle('Catálogo sin verificar');
     if(c.status==='fulfilled'){
-      state.commands=validCommands(c.value,VEHICLE_ID);
+      state.commands=validCommands(c.value,vehicle);
       catalogLoaded=true;
     }else{
       state.commands=[];
@@ -228,26 +266,33 @@ async function loadCatalog(){
       void control.move(cmd);
     });
     if(d.status==='fulfilled'){
-      demos=Array.isArray(d.value)?d.value.filter(x=>x?.activo===true&&x.id_vehiculo===VEHICLE_ID&&Number.isInteger(x.id_demo)):[];
+      demos=Array.isArray(d.value)?d.value.filter(x=>x?.activo===true&&x.id_vehiculo===vehicle&&Number.isInteger(x.id_demo)):[];
     }else{demos=[];catalogLoaded=false;}
+    if(commercial.status==='fulfilled'&&Array.isArray(commercial.value)){
+      demos.push(...commercial.value.filter(row=>row?.activo===true&&Number.isInteger(row.id)&&Array.isArray(row.pasos)).map(row=>({
+        id_demo:row.id,id_vehiculo:vehicle,nombre:row.nombre,pasos:row.pasos,key:`43:${row.id}`,commercial:true,
+      })));
+    }
     if(!state.demoActive&&!state.demoBusy&&!state.uncertain){
-      const selected=state.selectedDemo;
+      const selected=state.commercialDemo?`43:${state.selectedDemo}`:String(state.selectedDemo);
       ui.renderDemos(demos,{verified:d.status==='fulfilled'});
-      if(demos.some(demo=>demo.id_demo===selected))$('#demoSelect').value=String(selected);
+      if(demos.some(demo=>(demo.key??String(demo.id_demo))===selected))$('#demoSelect').value=selected;
       else{
-        ++selectionVersion;state.selectedDemo=null;state.stepsReady=false;
+        ++selectionVersion;state.selectedDemo=null;state.commercialDemo=false;state.stepsReady=false;
         ui.renderDemoSteps([]);
       }
     }
-  }finally{catalogBusy=false;refreshControls();}
+  }finally{if(generation===scope){catalogBusy=false;refreshControls();}}
 }
 async function retry(){
+  if(!platformChecked)await bootstrap();
   void api.evaluation({force:true});
-  if(navigation.view==='monitor')void monitor.refresh();
+  if(navigation.view==='monitor'&&api.vehicleId)void monitor.refresh();
   await Promise.all([checkHealth(),checkRds()]);if(apiAvailable===true)await loadCatalog();
 }
 
 $('#credentialsButton').addEventListener('click',()=>{
+  if(!platformChecked||api.platformEnabled)return;
   joystick?.neutral({notify:true});
   if(manualActive)stopManual();
   ui.showAuth();refreshControls();
@@ -319,7 +364,62 @@ document.addEventListener('keydown',event=>{
   }
 });
 
-refreshControls();socket.start();void api.evaluation();
+async function selectVehicle(id,unitId=null,physical=false){
+  const generation=++scope;
+  switching=true;
+  navigation.show('platform');
+  joystick?.neutral();
+  if(api.vehicleId&&api.hasAccess&&(manualActive||state.demoActive||state.demoBusy||state.movementBusy)){
+    if(sustained.active)void sustained.release();
+    await control.stop();
+  }
+  if(generation!==scope)return;
+  manualActive=false;gestureRequested=false;preserveCapture=false;awaitingConnection=false;
+  socket.close();
+  control.epoch++;control.invalidateMovement('vehicle_changed');control.demoStartController?.abort();
+  sustained.invalidate();monitor.close();
+  api.setVehicleId(id,unitId,physical);selectionVersion++;catalogBusy=false;catalogLoaded=false;
+  demos=[];control=buildControl();state=control.state;sustained=buildSustained();
+  monitor=new MonitorSession(api,ui.renderMonitor,{vehicleId:id});
+  ui.renderMonitor();ui.renderCommands([]);ui.renderDemos([]);ui.renderDemoSteps([]);
+  ui.displayVehicle(id?'Cargando unidad':'Selecciona una unidad');
+  ui.displayMovement('Neutral');
+  switching=false;
+  if(id){
+    socket.configure(id,async vehicle=>(await api.request('/plataforma/tickets',{
+      method:'POST',authorized:true,body:{id_vehiculo:vehicle},
+    })).ticket);
+    socket.start();await loadCatalog();
+  }else ui.setIndicator('ws','Sin unidad','wait');
+  refreshControls();
+}
+async function bootstrap(){
+  try{
+    const status=await api.request('/plataforma/status',{timeoutMs:4500,expectedStatus:200});
+    if(typeof status?.habilitada!=='boolean')throw Error('Estado de plataforma incompleto.');
+    if(status.habilitada){
+      protectedObserved=true;
+      api.setVehicleId(null);api.setPlatformEnabled(true);
+      ui.setIndicator('ws','Sin unidad','wait');
+      ui.displayVehicle('Sin unidad');
+      portal??=new Platform43(api,navigation,selectVehicle,loadCatalog);
+      portal.start();platformChecked=true;refreshControls();return;
+    }
+  }catch(error){
+    if(error.status!==404){
+      api.setVehicleId(null);api.setPlatformEnabled(true);
+      ui.setIndicator('ws','Sin verificar','wait');
+      ui.displayVehicle('Sin verificar');
+      portal??=new Platform43(api,navigation,selectVehicle,loadCatalog);
+      portal.unavailable();refreshControls();return;
+    }
+  }
+  if(protectedObserved)return; // Una sesión protegida no se degrada a acceso anterior.
+  api.setPlatformEnabled(false);api.setVehicleId(VEHICLE_ID);
+  navigation.available(['control','monitor','demo']);
+  platformChecked=true;socket.start();void api.evaluation();void loadCatalog();refreshControls();
+}
+refreshControls();void bootstrap();
 void checkHealth();void checkRds();
 setInterval(()=>void checkHealth(),API_CHECK_MS);
 setInterval(()=>void checkRds(),RDS_CHECK_MS);
@@ -331,8 +431,10 @@ window.addEventListener('online',()=>void retry());
 window.addEventListener('pagehide',()=>{
   if(manualActive)onConnectionLost();
   monitor.close();api.clearKey();api.clearEvaluation();$('#keyInput').value='';socket.close();
+  if(api.platformEnabled)api.setPlatformSession(null,0);
 });
 window.addEventListener('pageshow',event=>{if(event.persisted){
-  if(navigation.view==='monitor')void monitor.enter();
-  socket.start();void retry();
+  if(navigation.view==='monitor'&&api.vehicleId)void monitor.enter();
+  if(!api.platformEnabled||(api.signedIn&&api.vehicleId))socket.start();
+  void retry();
 }});

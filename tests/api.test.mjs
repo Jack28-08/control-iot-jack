@@ -9,6 +9,27 @@ function fakeFetch(t,implementation){
 }
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 
+test('la API protegida usa el Bearer y separa el ID histórico del ID comercial',async t=>{
+  const calls=[],api=new ApiClient(),token='B'.repeat(43);
+  fakeFetch(t,async(url,options)=>{
+    calls.push({path:new URL(url).pathname,options});
+    return json({},url.endsWith('/ejecutar')?202:200);
+  });
+  api.setKey('clave-sintetica-legado');
+  api.setPlatformEnabled(true);
+  api.setVehicleId(47,19,true);
+  await assert.rejects(api.history(),e=>e.code==='auth_missing');
+  assert.equal(await api.evaluation(),false);
+  api.setPlatformSession(token,Date.now()+30000,true);
+  await api.commands();
+  await api.startDemo(5,undefined,'barrera-local',true);
+  assert.deepEqual(calls.map(call=>call.path),['/vehiculos/47/comandos','/plataforma/demos/5/ejecutar']);
+  assert(calls.every(call=>call.options.headers.Authorization===`Bearer ${token}`&&
+    call.options.headers['X-API-Key']===undefined));
+  assert.deepEqual(JSON.parse(calls[1].options.body),{id_unidad:19});
+  assert.equal(calls[1].options.headers['X-IoT-Barrier'],'barrera-local');
+});
+
 test('GET no transmite la clave y POST usa el id_comando recibido del catálogo',async t=>{
   const calls=[];
   fakeFetch(t,async(url,options)=>{calls.push({url,options});return json({id_comando:42});});

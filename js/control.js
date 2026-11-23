@@ -4,7 +4,7 @@ export class ControlSession {
     this.api=api;
     this.view={change(){},operation(){},movement(){},step(){},neutral(){},confirmed(){},
       canDispatch:()=>true,barrier:()=>null,refreshBarrier(){},...view};
-    this.state={commands:[],selectedDemo:null,stepsReady:false,demoActive:false,demoBusy:false,
+    this.state={commands:[],selectedDemo:null,commercialDemo:false,stepsReady:false,demoActive:false,demoBusy:false,
       movementBusy:false,stopBusy:false,pending:null,lastRequested:null,activeDemoId:null,
       execution:null,lastOrder:0,uncertain:false,movementPhase:'idle',demoStatus:'En espera'};
     this.epoch=0;this.demoRevision=0;this.finished=new Set();this.activeController=null;
@@ -91,7 +91,9 @@ export class ControlSession {
     try{
       if(controller.signal.aborted)return;
       this.view.operation('DEMO · inicio solicitado','Esperando HTTP 202; la secuencia se ejecuta en AWS.');
-      const result=await this.api.startDemo(id,controller.signal,this.view.barrier());
+      const result=s.commercialDemo
+        ?await this.api.startDemo(id,controller.signal,this.view.barrier(),true)
+        :await this.api.startDemo(id,controller.signal,this.view.barrier());
       if(epoch!==this.epoch)return;
       if(result?.id_demo!==id||typeof result.id_ejecucion!=='string')throw Error('Respuesta DEMO inesperada.');
       if(revision!==this.demoRevision||this.finished.has(result.id_ejecucion))return;

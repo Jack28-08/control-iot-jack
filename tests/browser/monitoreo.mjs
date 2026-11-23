@@ -37,8 +37,9 @@ const fixtureBearer='A'.repeat(43);
 const stamp=id=>new Date(Date.UTC(2026,10,13,16,0,id)).toISOString();
 const bootstrap=await readFile(resolve(root,'.local/bootstrap-5.3.3.min.css'),'utf8').catch(()=>null);
 const viewports=[
-  [320,568],[360,640],[360,740],[390,844],[412,915],
-  [667,375],[844,390],[915,412],[768,1024],[1024,768],[1366,768],[1440,900],
+  [320,568],[360,640],[360,740],[375,667],[390,844],[412,915],[414,896],[430,932],
+  [568,320],[640,360],[667,375],[740,360],[844,390],[896,414],[915,412],[932,430],
+  [768,1024],[1024,768],[1280,720],[1366,768],[1440,900],[1920,1080],
 ];
 const baseCommands=['AVANZAR','RETROCEDER','GI','GIRAR_DERECHA','CAMBIAR_VELOCIDAD','SUBIR_GRUA','BAJAR_GRUA','DEMO'];
 const report={mode:'browser_local_with_rest_and_wss_doubles',browser:`Chromium ${browser.version()}`,
