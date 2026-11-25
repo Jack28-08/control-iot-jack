@@ -1,5 +1,4 @@
 .platform-view{align-content:start}
-.view-tabs{grid-template-columns:repeat(var(--tab-count,3),minmax(0,1fr))}
 .platform-shell{display:grid;gap:1rem;min-width:0;color:var(--text)}
 .platform-shell h2{font-size:clamp(1.25rem,3.2vw,1.85rem);font-weight:780;letter-spacing:-.03em}
 .platform-shell h3{font-size:1.08rem;font-weight:735}
@@ -52,7 +51,6 @@
   .platform-columns{grid-template-columns:minmax(11rem,.3fr) minmax(0,1fr);align-items:start}
   .platform-sections{display:grid;justify-items:stretch}
 }
-@media(min-width:1000px) and (min-height:650px){.view-tabs{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:430px){
   .view-tab.platform-tab .ico{display:none}
   .platform-tab{font-size:.72rem;overflow-wrap:anywhere}

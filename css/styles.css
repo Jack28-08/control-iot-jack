@@ -101,9 +101,9 @@ svg.ico {
 .state-wait { color: var(--warning); }
 .state-error { color: var(--danger); }
 
-.view-nav { grid-area: nav; min-width: 0; }
+.view-nav { grid-area: nav; min-width: 0; container-type: inline-size; }
 .view-tabs {
-  display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 3px;
+  display: grid; grid-template-columns: repeat(var(--tab-count,3),minmax(min-content,1fr)); gap: 3px;
   padding: 3px; border: 1px solid var(--line); border-radius: 14px; background: #131e22;
 }
 .view-tab {
@@ -113,6 +113,11 @@ svg.ico {
 }
 .view-tab[aria-selected="true"] { color: #142a22; background: var(--accent); border-color: #d0fae5; }
 .view-tab:hover:not([aria-selected="true"]) { background: #25383c; color: var(--text); }
+@container (max-width: 375px) {
+  .view-tabs:has(> :nth-child(4 of .view-tab:not([hidden]))) .view-tab {
+    flex-direction: column; gap: 2px; padding: 2px;
+  }
+}
 .main-content { grid-area: main; display: grid; min-width: 0; }
 .view-panel { display: grid; min-width: 0; gap: var(--gap); animation: enter-view var(--motion); }
 @keyframes enter-view { from { opacity: .65; } to { opacity: 1; } }
@@ -287,6 +292,7 @@ svg.ico {
   display: block; width: 100%; height: 100%; transform: scaleX(var(--progress,0)); transform-origin: left;
   background: linear-gradient(90deg,#62b4a4,var(--accent)); transition: transform 180ms ease;
 }
+.demo-controls { display: grid; gap: 6px; }
 .demo-actions,.dialog-actions { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 6px; }
 .action-primary,.action-secondary {
   min-height: 44px; border: 1px solid #4d666e; border-radius: 9px; padding: 4px 7px;
@@ -388,6 +394,7 @@ svg.ico {
 }
 @media (orientation: landscape) and (max-height: 475px) {
   :root { --gap: 4px; --pad: 6px; --stage-min: 105px; }
+  .header-row { display: grid; grid-template-columns: max-content minmax(0,1fr) max-content; }
   .access-dialog { max-width: 46vw; }
 }
 @media (min-width: 560px) and (orientation: landscape) and (max-height: 365px) {
@@ -396,10 +403,10 @@ svg.ico {
     grid-template-columns: minmax(0,1fr); justify-items: center; gap: 2px;
     padding-inline: 2px; text-align: center; font-size: 10.5px;
   }
-  .demo-console { grid-template-columns: minmax(0,1.8fr) minmax(0,1fr); gap: 4px; }
-  .demo-console > :not(.demo-actions,.stop-button) { grid-column: 1/-1; }
-  .demo-actions { gap: 3px; }
-  .demo-actions > button { padding-inline: 2px; }
+  .demo-console { gap: 4px; }
+  .demo-controls { grid-template-columns: minmax(min-content,1.8fr) minmax(min-content,1fr); gap: 4px; }
+  .demo-actions { grid-template-columns: minmax(min-content,1.2fr) minmax(min-content,1fr); gap: 3px; }
+  .demo-actions > button { min-width: 44px; padding-inline: 2px; }
 }
 @media (min-width: 560px) and (max-width: 639px) and (orientation: landscape) and (max-height: 365px) {
   :root { --gap: 3px; --pad: 5px; --stage-min: 81px; }
@@ -453,10 +460,10 @@ svg.ico {
   :root { --history-page-size: 10; --gap: 13px; }
   .page-wrap {
     grid-template: "header header" auto "nav health" auto "nav main" minmax(auto,1fr)
-      "nav feedback" auto "footer footer" auto / clamp(122px,12vw,168px) minmax(0,1fr);
+      "nav feedback" auto "footer footer" auto / minmax(min-content,clamp(122px,12vw,168px)) minmax(0,1fr);
   }
-  .view-nav { background: #10191d; border: 1px solid var(--quiet-line); border-radius: var(--radius); padding: 10px 7px; }
-  .view-tabs { grid-template-columns: minmax(0,1fr); gap: 7px; border: 0; padding: 0; background: transparent; }
+  .view-nav { container-type: normal; background: #10191d; border: 1px solid var(--quiet-line); border-radius: var(--radius); padding: 10px 7px; }
+  .view-tabs { grid-template-columns: minmax(min-content,1fr); gap: 7px; border: 0; padding: 0; background: transparent; }
   .view-tab { padding: 7px; gap: 8px; justify-content: flex-start; font-size: 13px; }
   .control-workspace { grid-template-columns: minmax(0,1.12fr) minmax(0,1fr); }
   .monitor-workspace { grid-template-columns: minmax(0,.75fr) minmax(0,1.25fr); }
@@ -477,7 +484,7 @@ svg.ico {
   .history-table { font-size: 13px; }
 }
 @media (max-width: 285px) {
-  .header-row { flex-wrap: wrap; }
+  .header-row { display: flex; flex-wrap: wrap; }
   .header-unit { min-width: 74px; }
   .view-tab { flex-direction: column; min-width: 0; font-size: 10px; }
   .view-tab span { min-width: 0; overflow-wrap: anywhere; }
